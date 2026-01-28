@@ -24,7 +24,6 @@ async def test_dtb():
     print("Finish")
 
 async def add_data_dtb():
-    start_time = datetime.now()
     conn = await asyncpg.connect(
             host=PG_HOST, 
             port=int(PG_PORT),
