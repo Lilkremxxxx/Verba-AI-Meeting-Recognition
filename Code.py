@@ -33,7 +33,7 @@ async def add_data_dtb():
         )
     await conn.execute(
         'INSERT INTO "users" ( "email", "password_hash") VALUES ($1, $2)',
-        "bangpoca@gmail.com", '1234'
+        "example@gmail.com", '1234'
     )
     print("Finish insert into dtb")
 asyncio.run(test_dtb())
