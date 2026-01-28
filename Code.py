@@ -2,8 +2,6 @@ import asyncio
 import asyncpg
 from dotenv import load_dotenv
 import os
-from datetime import datetime
-import time
 
 load_dotenv()
 PG_HOST=os.getenv("PG_HOST")
