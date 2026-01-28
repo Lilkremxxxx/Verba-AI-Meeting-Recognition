@@ -1,5 +1,6 @@
 Dataset/
 Demo/
 DAT301m/
+Guided_dtb/
 .env
 hf_token.txt
