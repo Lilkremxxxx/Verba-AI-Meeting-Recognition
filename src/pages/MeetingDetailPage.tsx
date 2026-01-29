@@ -56,6 +56,7 @@ import type { Meeting, TranscriptSegment, MeetingStatus, AISummary } from "@/typ
 import { formatTimeAgo } from "@/utils/time";
 import { summarizeTranscript } from "@/utils/summarize";
 import { exportMeetingToDocx } from "@/utils/exportDocx";
+import { EditableTranscriptSegment } from "@/components/meeting/EditableTranscriptSegment";
 
 // Format seconds to MM:SS
 function formatTimestamp(seconds: number): string {
@@ -76,6 +77,10 @@ export default function MeetingDetailPage() {
   const [loadingTranscript, setLoadingTranscript] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [transcriptError, setTranscriptError] = useState(false);
+  
+  // Edited segments tracking (frontend-only, not persisted)
+  // Map of segment index to edited text
+  const [editedSegments, setEditedSegments] = useState<Map<number, string>>(new Map());
   
   // Audio state
   const [isPlaying, setIsPlaying] = useState(false);
@@ -257,6 +262,22 @@ export default function MeetingDetailPage() {
       setExporting(false);
     }
   }, [meeting, segments, summary, exportIncludeSummary, exportIncludeTranscript]);
+
+  const handleTextEdit = useCallback((index: number, newText: string) => {
+    // Update the edited segments map
+    setEditedSegments((prev) => {
+      const updated = new Map(prev);
+      updated.set(index, newText);
+      return updated;
+    });
+
+    // Update the actual segment in the segments array
+    setSegments((prev) => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], text: newText };
+      return updated;
+    });
+  }, []);
 
   const getStatusBadge = (status: MeetingStatus) => {
     const statusConfig = {
@@ -583,42 +604,24 @@ export default function MeetingDetailPage() {
             ) : (
               <ScrollArea className="h-[600px] pr-4">
                 <div className="space-y-2">
-                  {segments.map((segment, index) => (
-                    <div
-                      key={index}
-                      ref={index === activeSegmentIndex ? activeSegmentRef : null}
-                      className={`flex gap-3 p-3 rounded-lg transition-all cursor-pointer ${
-                        index === activeSegmentIndex
-                          ? "bg-primary/10 border-l-4 border-primary"
-                          : "hover:bg-accent/50"
-                      }`}
-                      onClick={() => handleSegmentClick(segment)}
-                    >
-                      <div className="flex-shrink-0 w-20 text-xs text-muted-foreground pt-1">
-                        {formatTimestamp(segment.start)}
+                  {segments.map((segment, index) => {
+                    // Create a ref for the active segment
+                    const segmentRef = index === activeSegmentIndex ? activeSegmentRef : null;
+                    
+                    return (
+                      <div key={index} ref={segmentRef}>
+                        <EditableTranscriptSegment
+                          segment={segment}
+                          index={index}
+                          isActive={index === activeSegmentIndex}
+                          isEdited={editedSegments.has(index)}
+                          formatTimestamp={formatTimestamp}
+                          onSegmentClick={handleSegmentClick}
+                          onTextEdit={handleTextEdit}
+                        />
                       </div>
-                      <div className="flex-1 space-y-1">
-                        <div
-                          className={`text-sm ${
-                            index === activeSegmentIndex
-                              ? "font-semibold text-primary"
-                              : "font-medium text-primary/70"
-                          }`}
-                        >
-                          {segment.speaker}
-                        </div>
-                        <p
-                          className={`text-sm leading-relaxed ${
-                            index === activeSegmentIndex
-                              ? "font-medium text-foreground"
-                              : "text-foreground/80"
-                          }`}
-                        >
-                          {segment.text}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </ScrollArea>
             )}
