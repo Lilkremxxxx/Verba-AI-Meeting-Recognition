@@ -38,8 +38,37 @@ function set(meetingId, transcript) {
   fs.writeFileSync(DATA_PATH, JSON.stringify(transcripts, null, 2), "utf-8");
 }
 
+/**
+ * Update specific segments in a transcript
+ * @param {string} meetingId - Meeting ID
+ * @param {Array} editedSegments - Array of {index, text} objects
+ * @returns {Object|null} Updated transcript or null if not found
+ */
+function updateSegments(meetingId, editedSegments) {
+  const transcripts = readAll();
+  const transcript = transcripts[meetingId];
+  
+  if (!transcript) {
+    return null;
+  }
+
+  // Update segments by index
+  editedSegments.forEach(({ index, text }) => {
+    if (transcript.segments[index]) {
+      transcript.segments[index].text = text;
+    }
+  });
+
+  // Save updated transcript
+  transcripts[meetingId] = transcript;
+  fs.writeFileSync(DATA_PATH, JSON.stringify(transcripts, null, 2), "utf-8");
+  
+  return transcript;
+}
+
 module.exports = {
   readAll,
   getByMeetingId,
   set,
+  updateSegments,
 };

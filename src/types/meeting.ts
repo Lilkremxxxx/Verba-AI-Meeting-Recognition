@@ -25,9 +25,28 @@ export interface TranscriptSegment {
   text: string;
 }
 
-// Summary derived from transcript (frontend-generated)
+// Summary derived from transcript (frontend-generated - DEPRECATED)
 export interface AISummary {
   executiveSummary: string;
   keyHighlights: string[];
   actionItems: string[]; // Simple string array
+}
+
+// Summary API response format (from backend - DEPRECATED, kept for backward compatibility)
+export interface MeetingSummary {
+  meeting_id: string;
+  status: MeetingStatus;
+  summary: string;
+}
+
+// Summary request payload (POST /meetings/:id/summarize)
+export interface SummarizeRequest {
+  segments: TranscriptSegment[];
+}
+
+// Summary response from POST /meetings/:id/summarize
+export interface SummarizeResponse {
+  meeting_id: string;
+  status: MeetingStatus;
+  summary: string;
 }

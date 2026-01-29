@@ -7,6 +7,8 @@ const router = express.Router();
 const { upload, handleMulterError } = require("../middleware/upload");
 const store = require("../utils/meetingStore");
 const transcriptStore = require("../utils/transcriptStore");
+const summaryStore = require("../utils/summaryStore");
+const { generateMockSummary } = require("../utils/summarizeMock");
 
 /**
  * GET /meetings
@@ -53,6 +55,126 @@ router.get("/:id/transcript", (req, res) => {
     res
       .status(500)
       .json({ message: "Internal server error while reading transcript." });
+  }
+});
+
+/**
+ * PATCH /meetings/:id/transcript
+ * Update edited segments in transcript
+ * IMPORTANT: This route MUST come BEFORE /:id to avoid route conflict
+ */
+router.patch("/:id/transcript", (req, res) => {
+  try {
+    const { segments: editedSegments } = req.body;
+    
+    // Validate request
+    if (!editedSegments || !Array.isArray(editedSegments)) {
+      return res.status(400).json({ 
+        message: "Invalid request. Expected { segments: [{index, text}] }" 
+      });
+    }
+
+    // Validate each segment
+    for (const seg of editedSegments) {
+      if (typeof seg.index !== 'number' || typeof seg.text !== 'string') {
+        return res.status(400).json({ 
+          message: "Invalid segment format. Expected {index: number, text: string}" 
+        });
+      }
+    }
+
+    // Update transcript
+    const updatedTranscript = transcriptStore.updateSegments(
+      req.params.id,
+      editedSegments
+    );
+    
+    if (!updatedTranscript) {
+      return res.status(404).json({ message: "Transcript not found." });
+    }
+
+    console.log(
+      `✓ Transcript updated: ${req.params.id} - ${editedSegments.length} segment(s) edited`
+    );
+    
+    res.json(updatedTranscript);
+  } catch (error) {
+    console.error("Error updating transcript:", error);
+    res
+      .status(500)
+      .json({ message: "Internal server error while updating transcript." });
+  }
+});
+
+/**
+ * POST /meetings/:id/summarize
+ * Generate summary from provided transcript segments (frontend-driven)
+ * IMPORTANT: This route MUST come BEFORE /:id to avoid route conflict
+ */
+router.post("/:id/summarize", (req, res) => {
+  try {
+    const { segments } = req.body;
+    
+    // Validate request
+    if (!segments || !Array.isArray(segments)) {
+      return res.status(400).json({ 
+        message: "Invalid request. Expected { segments: [{start, end, speaker?, text}] }" 
+      });
+    }
+
+    // Validate meeting exists
+    const meeting = store.findById(req.params.id);
+    if (!meeting) {
+      return res.status(404).json({ message: "Meeting not found." });
+    }
+
+    // Generate mock summary from provided segments
+    const summaryText = generateMockSummary(segments);
+
+    // Return summary response
+    const response = {
+      meeting_id: req.params.id,
+      status: "DONE",
+      summary: summaryText,
+    };
+
+    console.log(
+      `✓ Summary generated: ${req.params.id} - ${segments.length} segment(s) processed`
+    );
+    
+    res.json(response);
+  } catch (error) {
+    console.error("Error generating summary:", error);
+    res
+      .status(500)
+      .json({ message: "Internal server error while generating summary." });
+  }
+});
+
+/**
+ * GET /meetings/:id/summary
+ * Get summary for a meeting (DEPRECATED - kept for backward compatibility)
+ * IMPORTANT: This route MUST come BEFORE /:id to avoid route conflict
+ */
+router.get("/:id/summary", (req, res) => {
+  try {
+    const summary = summaryStore.getByMeetingId(req.params.id);
+    
+    if (!summary) {
+      return res.status(404).json({ message: "Summary not found." });
+    }
+    
+    // Check if summary is ready (status DONE)
+    if (summary.status !== "DONE") {
+      return res.status(404).json({ message: "Summary not ready yet." });
+    }
+    
+    res.json(summary);
+  } catch (error) {
+    console.error("Error reading summary:", error);
+    res
+      .status(500)
+      .json({ message: "Internal server error while reading summary." });
   }
 });
 
