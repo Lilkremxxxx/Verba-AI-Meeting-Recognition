@@ -22,12 +22,14 @@ import {
   SkipBack,
   Sparkles,
   Download,
-  FileText
+  FileText,
+  Save
 } from "lucide-react";
 
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -35,6 +37,12 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import {
   Dialog,
   DialogContent,
@@ -51,10 +59,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-import { getMeetingById, getTranscriptByMeetingId } from "@/services/meetingService";
-import type { Meeting, TranscriptSegment, MeetingStatus, AISummary } from "@/types/meeting";
+import { getMeetingById, getTranscriptByMeetingId, updateTranscript, summarizeMeeting } from "@/services/meetingService";
+import type { Meeting, TranscriptSegment, MeetingStatus, SummarizeResponse } from "@/types/meeting";
 import { formatTimeAgo } from "@/utils/time";
-import { summarizeTranscript } from "@/utils/summarize";
 import { exportMeetingToDocx } from "@/utils/exportDocx";
 import { EditableTranscriptSegment } from "@/components/meeting/EditableTranscriptSegment";
 
@@ -68,19 +75,23 @@ function formatTimestamp(seconds: number): string {
 export default function MeetingDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { toast } = useToast();
   
   // State
   const [meeting, setMeeting] = useState<Meeting | null>(null);
   const [segments, setSegments] = useState<TranscriptSegment[]>([]);
-  const [summary, setSummary] = useState<AISummary | null>(null);
+  const [summary, setSummary] = useState<string | null>(null); // Now stores plain text summary
   const [loadingMeeting, setLoadingMeeting] = useState(true);
   const [loadingTranscript, setLoadingTranscript] = useState(true);
+  const [loadingSummary, setLoadingSummary] = useState(false);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [transcriptError, setTranscriptError] = useState(false);
   
-  // Edited segments tracking (frontend-only, not persisted)
+  // Edited segments tracking - "dirty" state for unsaved edits
   // Map of segment index to edited text
   const [editedSegments, setEditedSegments] = useState<Map<number, string>>(new Map());
+  const [savingTranscript, setSavingTranscript] = useState(false);
   
   // Audio state
   const [isPlaying, setIsPlaying] = useState(false);
@@ -135,12 +146,6 @@ export default function MeetingDetailPage() {
           const fetchedSegments = transcriptResult.data.segments || [];
           setSegments(fetchedSegments);
           setTranscriptError(false);
-          
-          // Auto-generate summary when transcript is loaded
-          if (fetchedSegments.length > 0) {
-            const generatedSummary = summarizeTranscript(fetchedSegments);
-            setSummary(generatedSummary);
-          }
         } else {
           // Transcript not available - don't block audio playback
           console.log("Transcript not available");
@@ -250,7 +255,7 @@ export default function MeetingDetailPage() {
       await exportMeetingToDocx({
         meeting,
         segments: exportIncludeTranscript ? segments : undefined,
-        summary: exportIncludeSummary ? summary || undefined : undefined,
+        summary: exportIncludeSummary && summary ? { executiveSummary: summary, keyHighlights: [], actionItems: [] } : undefined,
         includeSummary: exportIncludeSummary,
         includeTranscript: exportIncludeTranscript,
       });
@@ -262,6 +267,46 @@ export default function MeetingDetailPage() {
       setExporting(false);
     }
   }, [meeting, segments, summary, exportIncludeSummary, exportIncludeTranscript]);
+
+  const handleSummarize = useCallback(async () => {
+    if (!id || segments.length === 0) {
+      toast({
+        title: "Không thể tóm tắt",
+        description: "Chưa có transcript để tóm tắt.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setLoadingSummary(true);
+    setSummaryError(null);
+    
+    try {
+      // Use CURRENT transcript state (includes unsaved edits)
+      const result = await summarizeMeeting(id, segments);
+
+      if (result.success && result.data) {
+        setSummary(result.data.summary);
+        toast({
+          title: "Tóm tắt thành công",
+          description: "Đã tạo tóm tắt cuộc họp.",
+        });
+      } else {
+        throw new Error(result.error || "Không thể tạo tóm tắt");
+      }
+    } catch (err) {
+      console.error("Error generating summary:", err);
+      const errorMessage = err instanceof Error ? err.message : "Không thể tạo tóm tắt. Vui lòng thử lại.";
+      setSummaryError(errorMessage);
+      toast({
+        title: "Lỗi khi tóm tắt",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingSummary(false);
+    }
+  }, [id, segments, toast]);
 
   const handleTextEdit = useCallback((index: number, newText: string) => {
     // Update the edited segments map
@@ -278,6 +323,47 @@ export default function MeetingDetailPage() {
       return updated;
     });
   }, []);
+
+  const handleSaveTranscript = useCallback(async () => {
+    if (!id || editedSegments.size === 0) return;
+
+    setSavingTranscript(true);
+    try {
+      // Convert Map to array of {index, text}
+      const editsArray = Array.from(editedSegments.entries()).map(([index, text]) => ({
+        index,
+        text,
+      }));
+
+      // Send PATCH request
+      const result = await updateTranscript(id, editsArray);
+
+      if (result.success && result.data) {
+        // Update local state with response from backend
+        setSegments(result.data.segments || []);
+        
+        // Clear dirty state
+        setEditedSegments(new Map());
+
+        // Show success toast
+        toast({
+          title: "Đã lưu chỉnh sửa",
+          description: `${editsArray.length} đoạn transcript đã được cập nhật.`,
+        });
+      } else {
+        throw new Error(result.error || "Không thể lưu chỉnh sửa");
+      }
+    } catch (err) {
+      console.error("Error saving transcript:", err);
+      toast({
+        title: "Lỗi khi lưu",
+        description: err instanceof Error ? err.message : "Không thể lưu chỉnh sửa. Vui lòng thử lại.",
+        variant: "destructive",
+      });
+    } finally {
+      setSavingTranscript(false);
+    }
+  }, [id, editedSegments, toast]);
 
   const getStatusBadge = (status: MeetingStatus) => {
     const statusConfig = {
@@ -519,64 +605,121 @@ export default function MeetingDetailPage() {
           </CardContent>
         </Card>
 
-        {/* Summary Section */}
-        {hasSummary && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Sparkles className="h-5 w-5" />
-                Tóm tắt cuộc họp
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Executive Summary */}
-              <div>
-                <h3 className="font-semibold text-foreground mb-2">Tổng quan</h3>
-                <p className="text-sm text-foreground/80 leading-relaxed">
-                  {summary.executiveSummary}
-                </p>
-              </div>
-
-              {/* Key Highlights */}
-              {summary.keyHighlights.length > 0 && (
-                <div>
-                  <h3 className="font-semibold text-foreground mb-2">Điểm nổi bật</h3>
-                  <ul className="space-y-2">
-                    {summary.keyHighlights.map((highlight, index) => (
-                      <li key={index} className="text-sm text-foreground/80 flex gap-2">
-                        <span className="text-primary">•</span>
-                        <span>{highlight}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {/* Action Items */}
-              {summary.actionItems.length > 0 && (
-                <div>
-                  <h3 className="font-semibold text-foreground mb-2">Công việc cần làm</h3>
-                  <ul className="space-y-2">
-                    {summary.actionItems.map((item, index) => (
-                      <li key={index} className="text-sm text-foreground/80 flex gap-2">
-                        <span className="text-primary">☐</span>
-                        <span>{item}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        )}
+        {/* Summary Section - Collapsible, User-Triggered */}
+        <Card>
+          <Accordion type="single" collapsible defaultValue="">
+            <AccordionItem value="summary" className="border-none">
+              <CardHeader className="pb-3">
+                <AccordionTrigger className="hover:no-underline py-0">
+                  <CardTitle className="flex items-center gap-2">
+                    <Sparkles className="h-5 w-5" />
+                    Tóm tắt cuộc họp
+                  </CardTitle>
+                </AccordionTrigger>
+              </CardHeader>
+              <AccordionContent>
+                <CardContent className="pt-0 space-y-4">
+                  {!hasSummary && !loadingSummary ? (
+                    // Initial state - show summarize button
+                    <div className="py-8 text-center">
+                      <div className="w-16 h-16 rounded-full bg-accent flex items-center justify-center mx-auto mb-4">
+                        <Sparkles className="w-8 h-8 text-accent-foreground" />
+                      </div>
+                      <p className="text-sm text-muted-foreground mb-4">
+                        Nhấn nút bên dưới để tạo tóm tắt từ transcript hiện tại
+                      </p>
+                      <Button
+                        onClick={handleSummarize}
+                        disabled={!hasTranscript || loadingSummary}
+                        className="gap-2"
+                      >
+                        <Sparkles className="h-4 w-4" />
+                        Tóm tắt cuộc họp
+                      </Button>
+                      {!hasTranscript && (
+                        <p className="text-xs text-muted-foreground mt-2">
+                          Cần có transcript để tóm tắt
+                        </p>
+                      )}
+                    </div>
+                  ) : loadingSummary ? (
+                    // Loading state
+                    <div className="flex items-center gap-2 text-muted-foreground py-8 justify-center">
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                      <span>Đang tóm tắt cuộc hội thoại …</span>
+                    </div>
+                  ) : summaryError ? (
+                    // Error state
+                    <div className="py-8 text-center">
+                      <Alert variant="destructive" className="mb-4">
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertDescription>{summaryError}</AlertDescription>
+                      </Alert>
+                      <Button
+                        onClick={handleSummarize}
+                        variant="outline"
+                        className="gap-2"
+                      >
+                        Thử lại
+                      </Button>
+                    </div>
+                  ) : (
+                    // Success state - show summary with regenerate option
+                    <>
+                      <p className="text-sm text-foreground/80 leading-relaxed whitespace-pre-wrap">
+                        {summary}
+                      </p>
+                      <div className="flex justify-end pt-2">
+                        <Button
+                          onClick={handleSummarize}
+                          variant="outline"
+                          size="sm"
+                          className="gap-2"
+                          disabled={loadingSummary}
+                        >
+                          <Sparkles className="h-4 w-4" />
+                          Tạo lại tóm tắt
+                        </Button>
+                      </div>
+                    </>
+                  )}
+                </CardContent>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
+        </Card>
 
         {/* Transcript */}
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <FileText className="h-5 w-5" />
-              Bản ghi âm chi tiết
-            </CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5" />
+                Bản ghi âm chi tiết
+              </CardTitle>
+              
+              {/* Save button - only show when there are unsaved edits */}
+              {editedSegments.size > 0 && (
+                <Button
+                  onClick={handleSaveTranscript}
+                  disabled={savingTranscript}
+                  className="gap-2"
+                  size="sm"
+                >
+                  {savingTranscript ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Đang lưu...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="h-4 w-4" />
+                      Lưu chỉnh sửa ({editedSegments.size})
+                    </>
+                  )}
+                </Button>
+              )}
+            </div>
           </CardHeader>
           <CardContent>
             {loadingTranscript ? (
@@ -651,7 +794,7 @@ export default function MeetingDetailPage() {
                   className={!hasSummary ? "text-muted-foreground" : ""}
                 >
                   Bao gồm tóm tắt
-                  {!hasSummary && " (chưa có)"}
+                  {!hasSummary && " (chưa tạo)"}
                 </Label>
               </div>
 
