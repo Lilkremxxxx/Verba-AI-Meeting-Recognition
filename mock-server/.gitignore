@@ -1,0 +1,20 @@
+# Dependencies
+node_modules/
+
+# Uploaded files
+uploads/
+
+# Data files (keep meetings.json template)
+data/meetings.json
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment variables
+.env
+.env.local
+
+# OS files
+.DS_Store
+Thumbs.db
