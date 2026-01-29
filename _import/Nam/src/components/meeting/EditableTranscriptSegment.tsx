@@ -164,17 +164,22 @@ export function EditableTranscriptSegment({
             }`}
           >
             <p className="pr-8">{segment.text}</p>
-            {/* Edit icon on hover - right side */}
+            {/* Edit hint on hover */}
             <div className="absolute top-0 right-0 opacity-0 group-hover:opacity-100 transition-opacity">
               <Button
                 size="sm"
                 variant="ghost"
                 className="h-6 w-6 p-0"
                 onClick={handleTextClick}
-                title="Nhấn để chỉnh sửa"
               >
                 <Pencil className="h-3 w-3 text-muted-foreground" />
               </Button>
+            </div>
+            {/* Hover hint */}
+            <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+              <div className="absolute bottom-0 left-0 text-xs text-muted-foreground">
+                Nhấn để chỉnh sửa
+              </div>
             </div>
           </div>
         )}
