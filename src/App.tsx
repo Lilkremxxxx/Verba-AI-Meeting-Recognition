@@ -8,7 +8,8 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import Dashboard from "./pages/Dashboard";
-import MeetingDetail from "./pages/MeetingDetail";
+import MeetingsPage from "./pages/MeetingsPage";
+import MeetingDetailPage from "./pages/MeetingDetailPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -24,7 +25,7 @@ const App = () => (
             {/* Public routes */}
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
-            
+
             {/* Protected routes */}
             <Route
               path="/dashboard"
@@ -35,17 +36,25 @@ const App = () => (
               }
             />
             <Route
-              path="/meeting/:id"
+              path="/meetings"
               element={
                 <ProtectedRoute>
-                  <MeetingDetail />
+                  <MeetingsPage />
                 </ProtectedRoute>
               }
             />
-            
+            <Route
+              path="/meetings/:id"
+              element={
+                <ProtectedRoute>
+                  <MeetingDetailPage />
+                </ProtectedRoute>
+              }
+            />
+
             {/* Redirect root to dashboard or login */}
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
-            
+
             {/* Catch-all */}
             <Route path="*" element={<NotFound />} />
           </Routes>

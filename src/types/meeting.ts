@@ -1,14 +1,30 @@
 export type MeetingStatus = 'QUEUED' | 'PROCESSING' | 'DONE' | 'FAILED';
 
-export interface TranscriptSegment {
+// Backend API response format (snake_case)
+export interface Meeting {
   id: string;
+  title: string;
+  status: MeetingStatus;
+  original_filename: string;
+  created_at: string; // ISO timestamp
+}
+
+// Transcript API response format (Approach 2: separate endpoint)
+export interface TranscriptResponse {
+  meeting_id: string;
+  status: MeetingStatus;
+  segments: TranscriptSegment[];
+}
+
+// Transcript segment from API (snake_case)
+export interface TranscriptSegment {
+  start: number;  // seconds
+  end: number;    // seconds
   speaker: string;
-  speakerLabel: string;
-  startTime: number;
-  endTime: number;
   text: string;
 }
 
+// Legacy interfaces for future features
 export interface ActionItem {
   id: string;
   text: string;
@@ -20,18 +36,4 @@ export interface AISummary {
   executiveSummary: string;
   keyHighlights: string[];
   actionItems: ActionItem[];
-}
-
-export interface Meeting {
-  id: string;
-  title: string;
-  fileName: string;
-  fileSize: number;
-  status: MeetingStatus;
-  createdAt: Date;
-  updatedAt: Date;
-  audioUrl?: string;
-  transcript?: TranscriptSegment[];
-  summary?: AISummary;
-  speakerMap: Record<string, string>;
 }
