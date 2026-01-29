@@ -1,10 +1,10 @@
-import { Meeting } from '@/types/meeting';
-import { Card, CardContent } from '@/components/ui/card';
-import { StatusBadge } from './StatusBadge';
-import { FileAudio, Calendar, HardDrive, ChevronRight } from 'lucide-react';
-import { formatDistanceToNow } from 'date-fns';
-import { vi } from 'date-fns/locale';
-import { motion } from 'framer-motion';
+import { Meeting } from "@/types/meeting";
+import { Card, CardContent } from "@/components/ui/card";
+import { StatusBadge } from "./StatusBadge";
+import { FileAudio, Calendar, HardDrive, ChevronRight } from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
+import { vi } from "date-fns/locale";
+import { motion } from "framer-motion";
 
 interface MeetingCardProps {
   meeting: Meeting;
@@ -19,7 +19,7 @@ function formatFileSize(bytes: number): string {
 }
 
 export function MeetingCard({ meeting, onClick }: MeetingCardProps) {
-  const isClickable = meeting.status === 'DONE';
+  const isClickable = meeting.status === "DONE";
 
   return (
     <motion.div
@@ -29,8 +29,8 @@ export function MeetingCard({ meeting, onClick }: MeetingCardProps) {
       <Card
         className={`transition-all duration-200 border-border/50 ${
           isClickable
-            ? 'cursor-pointer hover:shadow-soft hover:border-primary/30'
-            : 'opacity-80'
+            ? "cursor-pointer hover:shadow-soft hover:border-primary/30"
+            : "opacity-80"
         }`}
         onClick={isClickable ? onClick : undefined}
       >
@@ -40,23 +40,22 @@ export function MeetingCard({ meeting, onClick }: MeetingCardProps) {
               <div className="w-12 h-12 rounded-xl bg-accent flex items-center justify-center flex-shrink-0">
                 <FileAudio className="w-6 h-6 text-accent-foreground" />
               </div>
-              
+
               <div className="min-w-0 flex-1">
                 <h3 className="font-semibold text-foreground truncate mb-1">
                   {meeting.title}
                 </h3>
                 <p className="text-sm text-muted-foreground truncate mb-2">
-                  {meeting.fileName}
+                  {meeting.original_filename}
                 </p>
-                
+
                 <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
                   <span className="flex items-center gap-1">
                     <Calendar className="h-3.5 w-3.5" />
-                    {formatDistanceToNow(meeting.createdAt, { addSuffix: true, locale: vi })}
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <HardDrive className="h-3.5 w-3.5" />
-                    {formatFileSize(meeting.fileSize)}
+                    {formatDistanceToNow(meeting.created_at, {
+                      addSuffix: true,
+                      locale: vi,
+                    })}
                   </span>
                 </div>
               </div>
