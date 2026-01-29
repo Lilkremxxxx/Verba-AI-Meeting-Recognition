@@ -290,7 +290,7 @@ file=@/path/to/meeting_recording.mp3
 
 // 422 - Unsupported file type
 {
-  "detail": "Unsupported file format. Use: mp3, mp4, wav, m4a"
+  "detail": "Unsupported file format. Use: mp3, wav"
 }
 
 // 500 Internal Server Error

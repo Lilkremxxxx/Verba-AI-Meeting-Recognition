@@ -37,7 +37,7 @@ app.add_middleware(
 
 
 
-app.include_router(meetings_endpoint_router)
+app.include_router(meetings_endpoint_router, prefix="/meetings", tags=["meetings"])
 
 
 class Item(BaseModel):
