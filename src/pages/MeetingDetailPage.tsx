@@ -1,13 +1,29 @@
 /**
- * MeetingDetailPage - Audio playback with transcript highlighting
- * 
- * IMPORTANT: Place a demo audio file at public/audio/demo.mp3 (or demo.wav) for local testing.
- * The audio player will use this local file as a fallback until the backend provides audioUrl.
+ * MeetingDetailPage - Audio playback with transcript highlighting + Summary + Export
+ * Features:
+ * - Playback speed control (0.75x, 1x, 1.25x, 1.5x, 2x)
+ * - Seek controls (+/- 5s)
+ * - Two-way sync between audio and transcript
+ * - Auto-generated summary from transcript
+ * - Export to DOCX with optional summary
  */
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Loader2, AlertCircle, ArrowLeft, Play, Pause, FileAudio, Clock } from "lucide-react";
+import { 
+  Loader2, 
+  AlertCircle, 
+  ArrowLeft, 
+  Play, 
+  Pause, 
+  FileAudio, 
+  Clock,
+  SkipForward,
+  SkipBack,
+  Sparkles,
+  Download,
+  FileText
+} from "lucide-react";
 
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -17,10 +33,29 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 import { getMeetingById, getTranscriptByMeetingId } from "@/services/meetingService";
-import type { Meeting, TranscriptSegment, MeetingStatus } from "@/types/meeting";
+import type { Meeting, TranscriptSegment, MeetingStatus, AISummary } from "@/types/meeting";
 import { formatTimeAgo } from "@/utils/time";
+import { summarizeTranscript } from "@/utils/summarize";
+import { exportMeetingToDocx } from "@/utils/exportDocx";
 
 // Format seconds to MM:SS
 function formatTimestamp(seconds: number): string {
@@ -36,24 +71,29 @@ export default function MeetingDetailPage() {
   // State
   const [meeting, setMeeting] = useState<Meeting | null>(null);
   const [segments, setSegments] = useState<TranscriptSegment[]>([]);
-  const [transcriptStatus, setTranscriptStatus] = useState<MeetingStatus | null>(null);
+  const [summary, setSummary] = useState<AISummary | null>(null);
   const [loadingMeeting, setLoadingMeeting] = useState(true);
   const [loadingTranscript, setLoadingTranscript] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [transcriptError, setTranscriptError] = useState(false);
   
   // Audio state
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [activeSegmentIndex, setActiveSegmentIndex] = useState<number | null>(null);
+  const [playbackRate, setPlaybackRate] = useState(1);
+  
+  // Export dialog state
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [exportIncludeSummary, setExportIncludeSummary] = useState(true);
+  const [exportIncludeTranscript, setExportIncludeTranscript] = useState(true);
+  const [exporting, setExporting] = useState(false);
   
   // Refs
   const audioRef = useRef<HTMLAudioElement>(null);
   const activeSegmentRef = useRef<HTMLDivElement>(null);
-
-  // Audio source: Use local fallback for testing
-  // TODO: When backend provides audioUrl, use: meeting.audioUrl || "/audio/demo.mp3"
-  const audioUrl = "/audio/demo.mp3";
+  const lastScrollTime = useRef<number>(0);
 
   useEffect(() => {
     const fetchMeetingData = async () => {
@@ -87,19 +127,25 @@ export default function MeetingDetailPage() {
         const transcriptResult = await getTranscriptByMeetingId(id);
 
         if (transcriptResult.success && transcriptResult.data) {
-          setTranscriptStatus(transcriptResult.data.status);
-          setSegments(transcriptResult.data.segments || []);
+          const fetchedSegments = transcriptResult.data.segments || [];
+          setSegments(fetchedSegments);
+          setTranscriptError(false);
+          
+          // Auto-generate summary when transcript is loaded
+          if (fetchedSegments.length > 0) {
+            const generatedSummary = summarizeTranscript(fetchedSegments);
+            setSummary(generatedSummary);
+          }
         } else {
-          // Transcript endpoint failed - show placeholder but keep audio playable
-          console.log("Transcript not available, using placeholder");
-          setTranscriptStatus("PROCESSING");
+          // Transcript not available - don't block audio playback
+          console.log("Transcript not available");
           setSegments([]);
+          setTranscriptError(true);
         }
       } catch (err) {
         console.error("Error fetching transcript:", err);
-        // Don't set error - just show processing state
-        setTranscriptStatus("PROCESSING");
         setSegments([]);
+        setTranscriptError(true);
       } finally {
         setLoadingTranscript(false);
       }
@@ -108,7 +154,7 @@ export default function MeetingDetailPage() {
     fetchMeetingData();
   }, [id]);
 
-  // Update active segment based on current time
+  // Update active segment based on current time (throttled)
   useEffect(() => {
     if (segments.length === 0) return;
 
@@ -119,8 +165,10 @@ export default function MeetingDetailPage() {
     if (activeIndex !== activeSegmentIndex) {
       setActiveSegmentIndex(activeIndex);
       
-      // Auto-scroll to active segment
-      if (activeIndex !== -1 && activeSegmentRef.current) {
+      // Auto-scroll to active segment (throttled to avoid jitter)
+      const now = Date.now();
+      if (activeIndex !== -1 && activeSegmentRef.current && now - lastScrollTime.current > 500) {
+        lastScrollTime.current = now;
         activeSegmentRef.current.scrollIntoView({
           behavior: "smooth",
           block: "center",
@@ -130,7 +178,7 @@ export default function MeetingDetailPage() {
   }, [currentTime, segments, activeSegmentIndex]);
 
   // Audio event handlers
-  const handlePlayPause = () => {
+  const handlePlayPause = useCallback(() => {
     if (!audioRef.current) return;
 
     if (isPlaying) {
@@ -139,29 +187,29 @@ export default function MeetingDetailPage() {
       audioRef.current.play();
     }
     setIsPlaying(!isPlaying);
-  };
+  }, [isPlaying]);
 
-  const handleTimeUpdate = () => {
+  const handleTimeUpdate = useCallback(() => {
     if (audioRef.current) {
       setCurrentTime(audioRef.current.currentTime);
     }
-  };
+  }, []);
 
-  const handleLoadedMetadata = () => {
+  const handleLoadedMetadata = useCallback(() => {
     if (audioRef.current) {
       setDuration(audioRef.current.duration);
     }
-  };
+  }, []);
 
-  const handleSegmentClick = (segment: TranscriptSegment) => {
+  const handleSegmentClick = useCallback((segment: TranscriptSegment) => {
     if (!audioRef.current) return;
 
     audioRef.current.currentTime = segment.start;
     audioRef.current.play();
     setIsPlaying(true);
-  };
+  }, []);
 
-  const handleSeek = (e: React.MouseEvent<HTMLDivElement>) => {
+  const handleSeek = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
     if (!audioRef.current || duration === 0) return;
 
     const rect = e.currentTarget.getBoundingClientRect();
@@ -171,7 +219,44 @@ export default function MeetingDetailPage() {
 
     audioRef.current.currentTime = newTime;
     setCurrentTime(newTime);
-  };
+  }, [duration]);
+
+  const handleSkip = useCallback((seconds: number) => {
+    if (!audioRef.current) return;
+
+    const newTime = Math.max(0, Math.min(duration, audioRef.current.currentTime + seconds));
+    audioRef.current.currentTime = newTime;
+    setCurrentTime(newTime);
+  }, [duration]);
+
+  const handlePlaybackRateChange = useCallback((rate: string) => {
+    const rateNum = parseFloat(rate);
+    setPlaybackRate(rateNum);
+    if (audioRef.current) {
+      audioRef.current.playbackRate = rateNum;
+    }
+  }, []);
+
+  const handleExport = useCallback(async () => {
+    if (!meeting) return;
+
+    setExporting(true);
+    try {
+      await exportMeetingToDocx({
+        meeting,
+        segments: exportIncludeTranscript ? segments : undefined,
+        summary: exportIncludeSummary ? summary || undefined : undefined,
+        includeSummary: exportIncludeSummary,
+        includeTranscript: exportIncludeTranscript,
+      });
+      setExportDialogOpen(false);
+    } catch (err) {
+      console.error("Export failed:", err);
+      alert("Xuất file thất bại. Vui lòng thử lại.");
+    } finally {
+      setExporting(false);
+    }
+  }, [meeting, segments, summary, exportIncludeSummary, exportIncludeTranscript]);
 
   const getStatusBadge = (status: MeetingStatus) => {
     const statusConfig = {
@@ -253,6 +338,12 @@ export default function MeetingDetailPage() {
     );
   }
 
+  // Check if audioUrl is available
+  const audioUrl = meeting.audioUrl;
+  const hasAudio = !!audioUrl;
+  const hasTranscript = segments.length > 0;
+  const hasSummary = !!summary;
+
   // Success state
   return (
     <AppLayout>
@@ -287,6 +378,16 @@ export default function MeetingDetailPage() {
               </div>
             </div>
           </div>
+
+          {/* Export Button */}
+          <Button
+            variant="outline"
+            onClick={() => setExportDialogOpen(true)}
+            className="gap-2"
+          >
+            <Download className="h-4 w-4" />
+            Xuất DOCX
+          </Button>
         </div>
 
         <Separator />
@@ -300,59 +401,160 @@ export default function MeetingDetailPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <audio
-              ref={audioRef}
-              src={audioUrl}
-              onTimeUpdate={handleTimeUpdate}
-              onLoadedMetadata={handleLoadedMetadata}
-              onEnded={() => setIsPlaying(false)}
-            />
-            
-            <div className="flex items-center gap-4">
-              <Button
-                size="lg"
-                variant="default"
-                onClick={handlePlayPause}
-                className="gap-2"
-              >
-                {isPlaying ? (
-                  <>
-                    <Pause className="h-5 w-5" />
-                    Tạm dừng
-                  </>
-                ) : (
-                  <>
-                    <Play className="h-5 w-5" />
-                    Phát
-                  </>
-                )}
-              </Button>
-              
-              <div className="flex-1 space-y-1">
-                <div className="flex items-center justify-between text-sm text-muted-foreground">
-                  <span>{formatTimestamp(currentTime)}</span>
-                  <span>{formatTimestamp(duration)}</span>
+            {!hasAudio ? (
+              <Alert>
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  File ghi âm chưa sẵn sàng. Vui lòng thử lại sau.
+                </AlertDescription>
+              </Alert>
+            ) : (
+              <>
+                <audio
+                  ref={audioRef}
+                  src={audioUrl}
+                  onTimeUpdate={handleTimeUpdate}
+                  onLoadedMetadata={handleLoadedMetadata}
+                  onEnded={() => setIsPlaying(false)}
+                />
+                
+                <div className="space-y-4">
+                  {/* Playback Controls */}
+                  <div className="flex items-center gap-4">
+                    <Button
+                      size="icon"
+                      variant="outline"
+                      onClick={() => handleSkip(-5)}
+                      title="Lùi 5 giây"
+                    >
+                      <SkipBack className="h-4 w-4" />
+                    </Button>
+
+                    <Button
+                      size="lg"
+                      variant="default"
+                      onClick={handlePlayPause}
+                      className="gap-2"
+                    >
+                      {isPlaying ? (
+                        <>
+                          <Pause className="h-5 w-5" />
+                          Tạm dừng
+                        </>
+                      ) : (
+                        <>
+                          <Play className="h-5 w-5" />
+                          Phát
+                        </>
+                      )}
+                    </Button>
+
+                    <Button
+                      size="icon"
+                      variant="outline"
+                      onClick={() => handleSkip(5)}
+                      title="Tua 5 giây"
+                    >
+                      <SkipForward className="h-4 w-4" />
+                    </Button>
+
+                    {/* Playback Speed */}
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-muted-foreground">Tốc độ:</span>
+                      <Select value={playbackRate.toString()} onValueChange={handlePlaybackRateChange}>
+                        <SelectTrigger className="w-24">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="0.75">0.75x</SelectItem>
+                          <SelectItem value="1">1x</SelectItem>
+                          <SelectItem value="1.25">1.25x</SelectItem>
+                          <SelectItem value="1.5">1.5x</SelectItem>
+                          <SelectItem value="2">2x</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {/* Progress Bar */}
+                  <div className="flex-1 space-y-1">
+                    <div className="flex items-center justify-between text-sm text-muted-foreground">
+                      <span>{formatTimestamp(currentTime)}</span>
+                      <span>{formatTimestamp(duration)}</span>
+                    </div>
+                    <div
+                      className="h-2 bg-secondary rounded-full overflow-hidden cursor-pointer"
+                      onClick={handleSeek}
+                    >
+                      <div
+                        className="h-full bg-primary transition-all"
+                        style={{ width: `${duration > 0 ? (currentTime / duration) * 100 : 0}%` }}
+                      />
+                    </div>
+                  </div>
                 </div>
-                <div
-                  className="h-2 bg-secondary rounded-full overflow-hidden cursor-pointer"
-                  onClick={handleSeek}
-                >
-                  <div
-                    className="h-full bg-primary transition-all"
-                    style={{ width: `${duration > 0 ? (currentTime / duration) * 100 : 0}%` }}
-                  />
-                </div>
-              </div>
-            </div>
+              </>
+            )}
           </CardContent>
         </Card>
+
+        {/* Summary Section */}
+        {hasSummary && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Sparkles className="h-5 w-5" />
+                Tóm tắt cuộc họp
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Executive Summary */}
+              <div>
+                <h3 className="font-semibold text-foreground mb-2">Tổng quan</h3>
+                <p className="text-sm text-foreground/80 leading-relaxed">
+                  {summary.executiveSummary}
+                </p>
+              </div>
+
+              {/* Key Highlights */}
+              {summary.keyHighlights.length > 0 && (
+                <div>
+                  <h3 className="font-semibold text-foreground mb-2">Điểm nổi bật</h3>
+                  <ul className="space-y-2">
+                    {summary.keyHighlights.map((highlight, index) => (
+                      <li key={index} className="text-sm text-foreground/80 flex gap-2">
+                        <span className="text-primary">•</span>
+                        <span>{highlight}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Action Items */}
+              {summary.actionItems.length > 0 && (
+                <div>
+                  <h3 className="font-semibold text-foreground mb-2">Công việc cần làm</h3>
+                  <ul className="space-y-2">
+                    {summary.actionItems.map((item, index) => (
+                      <li key={index} className="text-sm text-foreground/80 flex gap-2">
+                        <span className="text-primary">☐</span>
+                        <span>{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         {/* Transcript */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <FileAudio className="h-5 w-5" />
-              Bản ghi âm
+              <FileText className="h-5 w-5" />
+              Bản ghi âm chi tiết
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -368,14 +570,14 @@ export default function MeetingDetailPage() {
                   </div>
                 ))}
               </div>
-            ) : transcriptStatus !== "DONE" || segments.length === 0 ? (
+            ) : transcriptError || !hasTranscript ? (
               <div className="py-12 text-center text-muted-foreground">
                 <div className="w-16 h-16 rounded-full bg-accent flex items-center justify-center mx-auto mb-4">
-                  <Clock className="w-8 h-8 text-accent-foreground animate-pulse" />
+                  <Clock className="w-8 h-8 text-accent-foreground" />
                 </div>
-                <p className="font-medium">Đang xử lý bản ghi âm...</p>
+                <p className="font-medium">Chưa có transcript (đang xử lý)</p>
                 <p className="text-sm mt-1">
-                  Bản ghi âm sẽ sẵn sàng khi trạng thái chuyển sang "Hoàn tất"
+                  Bản ghi âm vẫn có thể nghe được. Transcript sẽ sẵn sàng sau khi xử lý xong.
                 </p>
               </div>
             ) : (
@@ -422,6 +624,83 @@ export default function MeetingDetailPage() {
             )}
           </CardContent>
         </Card>
+
+        {/* Export Dialog */}
+        <Dialog open={exportDialogOpen} onOpenChange={setExportDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Xuất file DOCX</DialogTitle>
+              <DialogDescription>
+                Chọn nội dung muốn xuất vào file Word
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 py-4">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="include-summary"
+                  checked={exportIncludeSummary}
+                  onCheckedChange={(checked) => setExportIncludeSummary(checked === true)}
+                  disabled={!hasSummary}
+                />
+                <Label
+                  htmlFor="include-summary"
+                  className={!hasSummary ? "text-muted-foreground" : ""}
+                >
+                  Bao gồm tóm tắt
+                  {!hasSummary && " (chưa có)"}
+                </Label>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="include-transcript"
+                  checked={exportIncludeTranscript}
+                  onCheckedChange={(checked) => setExportIncludeTranscript(checked === true)}
+                  disabled={!hasTranscript}
+                />
+                <Label
+                  htmlFor="include-transcript"
+                  className={!hasTranscript ? "text-muted-foreground" : ""}
+                >
+                  Bao gồm bản ghi âm chi tiết
+                  {!hasTranscript && " (chưa có)"}
+                </Label>
+              </div>
+
+              <div className="text-sm text-muted-foreground">
+                Tên file: <span className="font-mono">{meeting.title || "meeting"}-{meeting.id}.docx</span>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setExportDialogOpen(false)}
+                disabled={exporting}
+              >
+                Hủy
+              </Button>
+              <Button
+                onClick={handleExport}
+                disabled={exporting}
+                className="gap-2"
+              >
+                {exporting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Đang xuất...
+                  </>
+                ) : (
+                  <>
+                    <Download className="h-4 w-4" />
+                    Xuất file
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </AppLayout>
   );

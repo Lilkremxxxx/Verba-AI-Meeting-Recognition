@@ -78,13 +78,7 @@ export default function MeetingsPage() {
   };
 
   const handleMeetingClick = (meeting: Meeting) => {
-    console.log("Meeting clicked:", meeting.id, "Status:", meeting.status); // Debug log
-    if (meeting.status !== "DONE") {
-      // Don't navigate for non-DONE meetings
-      console.log("Navigation blocked - status is not DONE");
-      return;
-    }
-    console.log("Navigating to:", `/meetings/${meeting.id}`);
+    // Allow navigation for ALL statuses
     navigate(`/meetings/${meeting.id}`);
   };
 

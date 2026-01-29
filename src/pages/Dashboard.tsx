@@ -81,13 +81,7 @@ export default function Dashboard() {
   };
 
   const handleMeetingClick = (meeting: Meeting) => {
-    console.log("Meeting clicked:", meeting.id, "Status:", meeting.status); // Debug log
-    if (meeting.status !== "DONE") {
-      // Don't navigate for non-DONE meetings
-      console.log("Navigation blocked - status is not DONE");
-      return;
-    }
-    console.log("Navigating to:", `/meetings/${meeting.id}`);
+    // Allow navigation for ALL statuses
     navigate(`/meetings/${meeting.id}`);
   };
 
@@ -197,11 +191,7 @@ export default function Dashboard() {
                     transition={{ delay: index * 0.05 }}
                   >
                     <Card
-                      className={`p-4 transition-colors ${
-                        meeting.status === "DONE"
-                          ? "hover:bg-accent/50 cursor-pointer"
-                          : "cursor-not-allowed opacity-60"
-                      }`}
+                      className="p-4 hover:bg-accent/50 transition-colors cursor-pointer"
                       onClick={() => handleMeetingClick(meeting)}
                     >
                       <div className="flex items-center gap-4">
@@ -231,11 +221,6 @@ export default function Dashboard() {
                               {formatTimeAgo(meeting.created_at)}
                             </span>
                           </div>
-                          {meeting.status !== "DONE" && (
-                            <p className="text-xs text-muted-foreground mt-1">
-                              Chỉ xem được khi đã hoàn tất
-                            </p>
-                          )}
                         </div>
 
                         {/* Status Badge */}
@@ -244,9 +229,7 @@ export default function Dashboard() {
                         </div>
 
                         {/* Chevron */}
-                        {meeting.status === "DONE" && (
-                          <ChevronRight className="h-5 w-5 text-muted-foreground flex-shrink-0" />
-                        )}
+                        <ChevronRight className="h-5 w-5 text-muted-foreground flex-shrink-0" />
                       </div>
                     </Card>
                   </motion.div>

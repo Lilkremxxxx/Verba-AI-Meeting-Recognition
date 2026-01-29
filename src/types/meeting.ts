@@ -7,6 +7,7 @@ export interface Meeting {
   status: MeetingStatus;
   original_filename: string;
   created_at: string; // ISO timestamp
+  audioUrl?: string; // Only present in detail endpoint (GET /meetings/:id)
 }
 
 // Transcript API response format (Approach 2: separate endpoint)
@@ -24,16 +25,9 @@ export interface TranscriptSegment {
   text: string;
 }
 
-// Legacy interfaces for future features
-export interface ActionItem {
-  id: string;
-  text: string;
-  assignee?: string;
-  completed: boolean;
-}
-
+// Summary derived from transcript (frontend-generated)
 export interface AISummary {
   executiveSummary: string;
   keyHighlights: string[];
-  actionItems: ActionItem[];
+  actionItems: string[]; // Simple string array
 }
