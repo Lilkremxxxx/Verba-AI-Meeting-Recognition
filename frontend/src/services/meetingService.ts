@@ -31,7 +31,7 @@ export async function createMeeting(
     formData.append("title", payload.title);
     formData.append("audio", payload.audio);
 
-    const response = await fetch(`${API_BASE_URL}/upload`, {
+    const response = await fetch(`${API_BASE_URL}/meetings/upload`, {
       method: "POST",
       body: formData,
       // Don't set Content-Type header - browser will set it with boundary for multipart/form-data

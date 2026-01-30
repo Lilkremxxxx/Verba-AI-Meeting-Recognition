@@ -75,7 +75,73 @@ async def get_all_meetings():
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Failed to fetch meetings: {str(e)}")
 
+
+
 @router.post("/upload")
+async def upload_single_meeting(
+    title: str = Form(...),
+    audio: UploadFile = File(...)
+):
+    """Upload single audio file with title"""
+    try:
+        print(f"[Single Upload] Title: {title}, File: {audio.filename}")
+        
+        # Validate file
+        filename, filetail = os.path.splitext(audio.filename)
+        filetail = filetail.lower().lstrip(".")
+        
+        if filetail not in ["mp3", "wav"]:
+            raise HTTPException(
+                status_code=422, 
+                detail=f"Unsupported format: {filetail}. Use mp3 or wav"
+            )
+        
+        # Save file
+        UPLOAD_DIR = BASE_DIR / "uploads"
+        UPLOAD_DIR.mkdir(exist_ok=True)
+        
+        file_path = UPLOAD_DIR / audio.filename
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(audio.file, buffer)
+        
+        print(f"File saved: {file_path}")
+
+        conn = await asyncpg.connect(
+            host=PG_HOST, 
+            port=int(PG_PORT),
+            database=PG_DBNAME,
+            user=PG_USER, 
+            password=PG_PASSWORD
+        )
+        await conn.execute(
+            'INSERT INTO "meetings" ("user_id", "title", "original_filename", "storage_provider", "storage_path") VALUES ($1, $2, $3, $4, $5 )',
+            "7b15afa6-f4e1-4005-a536-91ccd0f37e4b",title, audio.filename,"LOCAL", str(file_path)
+        )
+        print("Finish insert into dtb")
+        
+        return {
+            "success": True,
+            "data": {
+                "id": filename,
+                "title": title,
+                "filename": audio.filename,
+                "path": str(file_path),
+                "size": file_path.stat().st_size,
+                "status": "QUEUED"
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Upload error: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+
+
+
+@router.post("/uploads")
 async def meetings_upload(files: List[UploadFile] = File(...)):
     """Upload audio files"""
     saved_files = []
