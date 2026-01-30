@@ -1,5 +1,4 @@
 # Main application
-from enum import Enum
 import time
 import asyncio
 from fastapi import FastAPI, Header, Request
