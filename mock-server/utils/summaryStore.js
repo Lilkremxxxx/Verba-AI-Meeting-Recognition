@@ -1,5 +1,5 @@
 /**
- * Summary store for managing meeting summaries
+ * Summary store for managing meeting summaries with caching
  */
 
 const fs = require("fs");
@@ -28,18 +28,40 @@ function getByMeetingId(meetingId) {
 }
 
 /**
- * Add or update summary for a meeting
+ * Add or update summary for a meeting (upsert)
  * @param {string} meetingId - Meeting ID
- * @param {Object} summary - Summary data
+ * @param {Object} summaryData - Summary data { meeting_id, summary, transcript_hash?, updated_at? }
+ */
+function upsert(meetingId, summaryData) {
+  const summaries = readAll();
+  
+  // Ensure updated_at is set
+  if (!summaryData.updated_at) {
+    summaryData.updated_at = new Date().toISOString();
+  }
+  
+  summaries[meetingId] = summaryData;
+  fs.writeFileSync(DATA_PATH, JSON.stringify(summaries, null, 2), "utf-8");
+}
+
+/**
+ * Alias for upsert (backward compatibility)
  */
 function set(meetingId, summary) {
-  const summaries = readAll();
-  summaries[meetingId] = summary;
-  fs.writeFileSync(DATA_PATH, JSON.stringify(summaries, null, 2), "utf-8");
+  upsert(meetingId, summary);
+}
+
+/**
+ * Alias for upsert (backward compatibility)
+ */
+function saveSummary(meetingId, summaryObject) {
+  upsert(meetingId, summaryObject);
 }
 
 module.exports = {
   readAll,
   getByMeetingId,
+  upsert,
   set,
+  saveSummary,
 };

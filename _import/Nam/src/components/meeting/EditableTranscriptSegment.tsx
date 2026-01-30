@@ -1,6 +1,6 @@
 /**
  * EditableTranscriptSegment - Inline editable transcript segment
- * 
+ *
  * Features:
  * - Click to edit text inline
  * - Enter to save, Esc to cancel
@@ -45,7 +45,7 @@ export function EditableTranscriptSegment({
       // Move cursor to end
       textareaRef.current.setSelectionRange(
         textareaRef.current.value.length,
-        textareaRef.current.value.length
+        textareaRef.current.value.length,
       );
     }
   }, [isEditing]);
@@ -132,11 +132,7 @@ export function EditableTranscriptSegment({
               placeholder="Nhập nội dung transcript..."
             />
             <div className="flex items-center gap-2">
-              <Button
-                size="sm"
-                onClick={handleSave}
-                className="gap-1"
-              >
+              <Button size="sm" onClick={handleSave} className="gap-1">
                 <Check className="h-3 w-3" />
                 Lưu
               </Button>
@@ -158,9 +154,7 @@ export function EditableTranscriptSegment({
           <div
             onClick={handleTextClick}
             className={`text-sm leading-relaxed group relative ${
-              isActive
-                ? "font-medium text-foreground"
-                : "text-foreground/80"
+              isActive ? "font-medium text-foreground" : "text-foreground/80"
             }`}
           >
             <p className="pr-8">{segment.text}</p>

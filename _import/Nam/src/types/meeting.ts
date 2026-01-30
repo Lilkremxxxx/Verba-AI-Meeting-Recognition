@@ -44,9 +44,18 @@ export interface SummarizeRequest {
   segments: TranscriptSegment[];
 }
 
-// Summary response from POST /meetings/:id/summarize
+// Summary response from POST /meetings/:id/summarize (INPUT-DRIVEN with caching)
 export interface SummarizeResponse {
   meeting_id: string;
-  status: MeetingStatus;
   summary: string;
+  transcript_hash?: string;
+  updated_at?: string;
+}
+
+// Cached summary from GET /meetings/:id/summary
+export interface CachedSummary {
+  meeting_id: string;
+  summary: string;
+  transcript_hash?: string;
+  updated_at?: string;
 }

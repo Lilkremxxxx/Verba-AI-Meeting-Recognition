@@ -2,7 +2,7 @@
  * Meeting service for API interactions
  */
 
-import type { Meeting, TranscriptResponse, MeetingSummary, TranscriptSegment, SummarizeResponse } from "@/types/meeting";
+import type { Meeting, TranscriptResponse, MeetingSummary, TranscriptSegment, SummarizeResponse, CachedSummary } from "@/types/meeting";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:3000";
@@ -232,13 +232,13 @@ export async function updateTranscript(
 
 
 /**
- * Fetches summary for a meeting (DEPRECATED - use summarizeMeeting instead)
+ * Fetches cached summary for a meeting
  * @param id - Meeting ID
- * @returns Promise with summary data or error
+ * @returns Promise with cached summary data or error
  */
 export async function getMeetingSummaryById(id: string): Promise<{
   success: boolean;
-  data?: MeetingSummary;
+  data?: CachedSummary;
   error?: string;
 }> {
   try {
@@ -250,13 +250,17 @@ export async function getMeetingSummaryById(id: string): Promise<{
     );
 
     if (!response.ok) {
+      if (response.status === 404) {
+        // Summary not found is not an error, just return success: false
+        return { success: false, error: "Summary not found" };
+      }
       const errorData = await response.json().catch(() => ({}));
       throw new Error(
         errorData.message || `HTTP error! status: ${response.status}`,
       );
     }
 
-    const data: MeetingSummary = await response.json();
+    const data: CachedSummary = await response.json();
 
     return {
       success: true,
@@ -273,20 +277,30 @@ export async function getMeetingSummaryById(id: string): Promise<{
 }
 
 /**
- * Generate summary from transcript segments (frontend-driven)
+ * Generate summary from transcript segments (frontend-driven with caching)
  * @param id - Meeting ID
  * @param segments - Current transcript segments from frontend state
+ * @param transcriptHash - Optional hash of transcript for freshness tracking
  * @returns Promise with summary data or error
  */
 export async function summarizeMeeting(
   id: string,
-  segments: TranscriptSegment[]
+  segments: TranscriptSegment[],
+  transcriptHash?: string
 ): Promise<{
   success: boolean;
   data?: SummarizeResponse;
   error?: string;
 }> {
   try {
+    const body: { segments: TranscriptSegment[]; transcript_hash?: string } = {
+      segments,
+    };
+    
+    if (transcriptHash) {
+      body.transcript_hash = transcriptHash;
+    }
+
     const response = await fetch(
       `${API_BASE_URL}/meetings/${encodeURIComponent(id)}/summarize`,
       {
@@ -294,7 +308,7 @@ export async function summarizeMeeting(
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ segments }),
+        body: JSON.stringify(body),
       },
     );
 

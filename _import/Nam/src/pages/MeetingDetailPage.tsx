@@ -59,8 +59,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-import { getMeetingById, getTranscriptByMeetingId, updateTranscript, summarizeMeeting } from "@/services/meetingService";
-import type { Meeting, TranscriptSegment, MeetingStatus, SummarizeResponse } from "@/types/meeting";
+import { getMeetingById, getTranscriptByMeetingId, updateTranscript, summarizeMeeting, getMeetingSummaryById } from "@/services/meetingService";
+import type { Meeting, TranscriptSegment, MeetingStatus, SummarizeResponse, CachedSummary } from "@/types/meeting";
 import { formatTimeAgo } from "@/utils/time";
 import { exportMeetingToDocx } from "@/utils/exportDocx";
 import { EditableTranscriptSegment } from "@/components/meeting/EditableTranscriptSegment";
@@ -80,7 +80,9 @@ export default function MeetingDetailPage() {
   // State
   const [meeting, setMeeting] = useState<Meeting | null>(null);
   const [segments, setSegments] = useState<TranscriptSegment[]>([]);
-  const [summary, setSummary] = useState<string | null>(null); // Now stores plain text summary
+  const [summary, setSummary] = useState<string | null>(null);
+  const [summaryUpdatedAt, setSummaryUpdatedAt] = useState<string | null>(null);
+  const [summaryTranscriptHash, setSummaryTranscriptHash] = useState<string | null>(null);
   const [loadingMeeting, setLoadingMeeting] = useState(true);
   const [loadingTranscript, setLoadingTranscript] = useState(true);
   const [loadingSummary, setLoadingSummary] = useState(false);
@@ -158,6 +160,28 @@ export default function MeetingDetailPage() {
         setTranscriptError(true);
       } finally {
         setLoadingTranscript(false);
+      }
+
+      // Auto-fetch cached summary on mount
+      try {
+        setLoadingSummary(true);
+        const summaryResult = await getMeetingSummaryById(id);
+
+        if (summaryResult.success && summaryResult.data) {
+          setSummary(summaryResult.data.summary);
+          setSummaryUpdatedAt(summaryResult.data.updated_at || null);
+          setSummaryTranscriptHash(summaryResult.data.transcript_hash || null);
+          console.log("✓ Cached summary loaded");
+        } else {
+          // Summary not found - user will need to generate it
+          console.log("No cached summary found");
+          setSummary(null);
+        }
+      } catch (err) {
+        console.error("Error fetching summary:", err);
+        setSummary(null);
+      } finally {
+        setLoadingSummary(false);
       }
     };
 
@@ -255,7 +279,10 @@ export default function MeetingDetailPage() {
       await exportMeetingToDocx({
         meeting,
         segments: exportIncludeTranscript ? segments : undefined,
-        summary: exportIncludeSummary && summary ? { executiveSummary: summary, keyHighlights: [], actionItems: [] } : undefined,
+        summary: exportIncludeSummary && summary ? {
+          text: summary,
+          updated_at: summaryUpdatedAt || undefined,
+        } : undefined,
         includeSummary: exportIncludeSummary,
         includeTranscript: exportIncludeTranscript,
       });
@@ -266,7 +293,7 @@ export default function MeetingDetailPage() {
     } finally {
       setExporting(false);
     }
-  }, [meeting, segments, summary, exportIncludeSummary, exportIncludeTranscript]);
+  }, [meeting, segments, summary, summaryUpdatedAt, exportIncludeSummary, exportIncludeTranscript]);
 
   const handleSummarize = useCallback(async () => {
     if (!id || segments.length === 0) {
@@ -282,11 +309,17 @@ export default function MeetingDetailPage() {
     setSummaryError(null);
     
     try {
+      // Compute simple hash from transcript for freshness tracking
+      const transcriptText = segments.map(s => s.text).join('');
+      const transcriptHash = transcriptText.substring(0, 50);
+
       // Use CURRENT transcript state (includes unsaved edits)
-      const result = await summarizeMeeting(id, segments);
+      const result = await summarizeMeeting(id, segments, transcriptHash);
 
       if (result.success && result.data) {
         setSummary(result.data.summary);
+        setSummaryUpdatedAt(result.data.updated_at || null);
+        setSummaryTranscriptHash(result.data.transcript_hash || null);
         toast({
           title: "Tóm tắt thành công",
           description: "Đã tạo tóm tắt cuộc họp.",

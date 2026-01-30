@@ -12,7 +12,20 @@ import {
   AlignmentType,
   UnderlineType,
 } from "docx";
-import type { Meeting, TranscriptSegment, AISummary } from "@/types/meeting";
+import type { Meeting, TranscriptSegment } from "@/types/meeting";
+
+export interface ExportSummary {
+  text: string;
+  updated_at?: string;
+}
+
+export interface ExportOptions {
+  meeting: Meeting;
+  segments?: TranscriptSegment[];
+  summary?: ExportSummary;
+  includeSummary: boolean;
+  includeTranscript: boolean;
+}
 
 /**
  * Format seconds to MM:SS for transcript timestamps
@@ -35,14 +48,6 @@ function formatDate(isoString: string): string {
     hour: "2-digit",
     minute: "2-digit",
   });
-}
-
-export interface ExportOptions {
-  meeting: Meeting;
-  segments?: TranscriptSegment[];
-  summary?: AISummary;
-  includeSummary: boolean;
-  includeTranscript: boolean;
 }
 
 /**
@@ -113,80 +118,66 @@ export async function exportMeetingToDocx(options: ExportOptions): Promise<void>
   );
 
   // Summary section
-  if (includeSummary && summary) {
-    children.push(
-      new Paragraph({
-        text: "Tóm tắt cuộc họp",
-        heading: HeadingLevel.HEADING_2,
-        spacing: { before: 300, after: 100 },
-      })
-    );
-
-    // Executive Summary
-    children.push(
-      new Paragraph({
-        text: "Tổng quan",
-        heading: HeadingLevel.HEADING_3,
-        spacing: { before: 200, after: 100 },
-      })
-    );
-
-    children.push(
-      new Paragraph({
-        text: summary.executiveSummary,
-        spacing: { after: 200 },
-      })
-    );
-
-    // Key Highlights
-    if (summary.keyHighlights.length > 0) {
+  if (includeSummary) {
+    if (summary && summary.text) {
       children.push(
         new Paragraph({
-          text: "Điểm nổi bật",
-          heading: HeadingLevel.HEADING_3,
-          spacing: { before: 200, after: 100 },
+          text: "Tóm tắt cuộc họp",
+          heading: HeadingLevel.HEADING_2,
+          spacing: { before: 300, after: 100 },
         })
       );
 
-      summary.keyHighlights.forEach((highlight, index) => {
-        children.push(
-          new Paragraph({
-            text: `${index + 1}. ${highlight}`,
-            spacing: { after: 100 },
-          })
-        );
-      });
-
+      // Summary text
       children.push(
         new Paragraph({
-          text: "",
+          text: summary.text,
           spacing: { after: 100 },
         })
       );
-    }
 
-    // Action Items
-    if (summary.actionItems.length > 0) {
+      // Updated timestamp if available
+      if (summary.updated_at) {
+        children.push(
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: `Cập nhật: ${formatDate(summary.updated_at)}`,
+                italics: true,
+                size: 18,
+                color: "666666",
+              }),
+            ],
+            spacing: { after: 200 },
+          })
+        );
+      } else {
+        children.push(
+          new Paragraph({
+            text: "",
+            spacing: { after: 200 },
+          })
+        );
+      }
+    } else {
+      // Summary selected but not available - show placeholder
       children.push(
         new Paragraph({
-          text: "Công việc cần làm",
-          heading: HeadingLevel.HEADING_3,
-          spacing: { before: 200, after: 100 },
+          text: "Tóm tắt cuộc họp",
+          heading: HeadingLevel.HEADING_2,
+          spacing: { before: 300, after: 100 },
         })
       );
 
-      summary.actionItems.forEach((item, index) => {
-        children.push(
-          new Paragraph({
-            text: `☐ ${item}`,
-            spacing: { after: 100 },
-          })
-        );
-      });
-
       children.push(
         new Paragraph({
-          text: "",
+          children: [
+            new TextRun({
+              text: "(Chưa có tóm tắt)",
+              italics: true,
+              color: "999999",
+            }),
+          ],
           spacing: { after: 200 },
         })
       );

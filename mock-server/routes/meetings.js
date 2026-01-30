@@ -108,12 +108,13 @@ router.patch("/:id/transcript", (req, res) => {
 
 /**
  * POST /meetings/:id/summarize
- * Generate summary from provided transcript segments (frontend-driven)
+ * Generate summary from provided transcript segments (INPUT-DRIVEN with caching)
+ * Returns summary immediately AND persists to summaries.json for future retrieval
  * IMPORTANT: This route MUST come BEFORE /:id to avoid route conflict
  */
 router.post("/:id/summarize", (req, res) => {
   try {
-    const { segments } = req.body;
+    const { segments, transcript_hash } = req.body;
     
     // Validate request
     if (!segments || !Array.isArray(segments)) {
@@ -122,27 +123,51 @@ router.post("/:id/summarize", (req, res) => {
       });
     }
 
-    // Validate meeting exists
-    const meeting = store.findById(req.params.id);
-    if (!meeting) {
-      return res.status(404).json({ message: "Meeting not found." });
+    // Validate segments array is not empty
+    if (segments.length === 0) {
+      return res.status(400).json({ 
+        message: "Segments array cannot be empty" 
+      });
+    }
+
+    // Validate each segment has text
+    for (const segment of segments) {
+      if (!segment.text || typeof segment.text !== 'string') {
+        return res.status(400).json({ 
+          message: "Each segment must contain a 'text' field" 
+        });
+      }
     }
 
     // Generate mock summary from provided segments
     const summaryText = generateMockSummary(segments);
 
-    // Return summary response
-    const response = {
+    // Compute transcript hash if not provided
+    const computedHash = transcript_hash || 
+      segments.map(s => s.text).join('').substring(0, 50);
+
+    // Create summary object for caching
+    const summaryData = {
       meeting_id: req.params.id,
-      status: "DONE",
       summary: summaryText,
+      transcript_hash: computedHash,
+      updated_at: new Date().toISOString(),
     };
 
+    // Persist to summaries.json for future retrieval
+    summaryStore.upsert(req.params.id, summaryData);
+
     console.log(
-      `✓ Summary generated: ${req.params.id} - ${segments.length} segment(s) processed`
+      `✓ Summary generated and cached: ${req.params.id} - ${segments.length} segment(s) processed`
     );
     
-    res.json(response);
+    // Return summary response immediately (input-driven)
+    res.json({
+      meeting_id: req.params.id,
+      summary: summaryText,
+      transcript_hash: computedHash,
+      updated_at: summaryData.updated_at,
+    });
   } catch (error) {
     console.error("Error generating summary:", error);
     res
@@ -153,7 +178,7 @@ router.post("/:id/summarize", (req, res) => {
 
 /**
  * GET /meetings/:id/summary
- * Get summary for a meeting (DEPRECATED - kept for backward compatibility)
+ * Get cached summary for a meeting
  * IMPORTANT: This route MUST come BEFORE /:id to avoid route conflict
  */
 router.get("/:id/summary", (req, res) => {
@@ -161,12 +186,7 @@ router.get("/:id/summary", (req, res) => {
     const summary = summaryStore.getByMeetingId(req.params.id);
     
     if (!summary) {
-      return res.status(404).json({ message: "Summary not found." });
-    }
-    
-    // Check if summary is ready (status DONE)
-    if (summary.status !== "DONE") {
-      return res.status(404).json({ message: "Summary not ready yet." });
+      return res.status(404).json({ message: "Summary not found" });
     }
     
     res.json(summary);

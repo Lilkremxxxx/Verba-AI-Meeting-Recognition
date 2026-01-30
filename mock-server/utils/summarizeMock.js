@@ -1,38 +1,42 @@
 /**
  * Mock AI summarization utility
  * Generates a fake summary from transcript segments
+ * 
+ * FAKE SUMMARY GENERATION LOGIC:
+ * 1. Join all segment.text into one string
+ * 2. Take first 300-500 characters
+ * 3. Prefix with "Tóm tắt (mock): "
+ * 4. No AI call - purely deterministic
  */
 
 /**
  * Generate a mock summary from transcript segments
  * @param {Array} segments - Array of transcript segments
- * @returns {string} - Generated summary text
+ * @returns {string} - Generated fake summary text
  */
 function generateMockSummary(segments) {
   if (!segments || segments.length === 0) {
-    return "Cuộc họp không có nội dung transcript để tóm tắt.";
+    return "Tóm tắt (mock): Cuộc họp không có nội dung transcript để tóm tắt.";
   }
 
-  // Extract all text
+  // Join all text from segments
   const allText = segments.map(seg => seg.text).join(" ");
   
-  // Simple mock: take first 200 chars + middle section + last 100 chars
-  const firstPart = allText.substring(0, 200);
-  const middleStart = Math.floor(allText.length / 2) - 50;
-  const middlePart = allText.substring(middleStart, middleStart + 100);
-  const lastPart = allText.substring(Math.max(0, allText.length - 100));
+  // Take first 300-500 characters (aim for ~400)
+  const maxLength = 400;
+  let summaryText = allText.substring(0, maxLength);
+  
+  // If we cut off mid-word, try to end at last complete word
+  if (allText.length > maxLength) {
+    const lastSpace = summaryText.lastIndexOf(" ");
+    if (lastSpace > maxLength * 0.8) { // Only trim if we don't lose too much
+      summaryText = summaryText.substring(0, lastSpace);
+    }
+    summaryText += "...";
+  }
 
-  // Count speakers
-  const speakers = new Set(segments.map(seg => seg.speaker).filter(Boolean));
-  const speakerCount = speakers.size;
-
-  // Generate mock summary
-  const summary = `Cuộc họp có ${segments.length} đoạn hội thoại với ${speakerCount} người tham gia. ` +
-    `Nội dung chính: ${firstPart.trim()}... ` +
-    `Các vấn đề được thảo luận bao gồm: ${middlePart.trim()}... ` +
-    `Kết luận: ${lastPart.trim()}`;
-
-  return summary;
+  // Add prefix
+  return `Tóm tắt (mock): ${summaryText}`;
 }
 
 module.exports = {
