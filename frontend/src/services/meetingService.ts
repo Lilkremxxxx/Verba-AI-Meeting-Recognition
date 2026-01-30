@@ -5,7 +5,7 @@
 import type { Meeting, TranscriptResponse, MeetingSummary, TranscriptSegment, SummarizeResponse } from "@/types/meeting";
 
 const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "http://localhost:3000";
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
 export interface CreateMeetingPayload {
   title: string;
@@ -31,7 +31,7 @@ export async function createMeeting(
     formData.append("title", payload.title);
     formData.append("audio", payload.audio);
 
-    const response = await fetch(`${API_BASE_URL}/meetings`, {
+    const response = await fetch(`${API_BASE_URL}/upload`, {
       method: "POST",
       body: formData,
       // Don't set Content-Type header - browser will set it with boundary for multipart/form-data
@@ -71,7 +71,7 @@ export async function getMeetings(): Promise<{
   error?: string;
 }> {
   try {
-    const response = await fetch(`${API_BASE_URL}/meetings`, {
+    const response = await fetch(`${API_BASE_URL}/meetings/`, {
       method: "GET",
     });
 
