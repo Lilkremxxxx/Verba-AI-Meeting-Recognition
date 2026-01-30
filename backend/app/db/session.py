@@ -49,3 +49,4 @@ async def get_db():
     
     async with _pool.acquire() as connection:
         yield connection
+
