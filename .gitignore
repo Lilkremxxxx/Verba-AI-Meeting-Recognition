@@ -7,3 +7,5 @@ hf_token.txt
 .vscode/
 dist/
 node_modules/
+__pycache__/
+*.pyc
