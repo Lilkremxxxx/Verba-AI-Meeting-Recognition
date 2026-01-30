@@ -4,10 +4,10 @@
     "status": "DONE",
     "segments": [
       {
-        "start": 0.0,
+        "start": 0,
         "end": 3.5,
         "speaker": "Nguyễn Văn A",
-        "text": "Chào mọi người, hôm nay chúng ta sẽ thảo luận về dự án mới."
+        "text": "test save"
       },
       {
         "start": 3.5,
@@ -100,7 +100,7 @@
     "status": "DONE",
     "segments": [
       {
-        "start": 0.0,
+        "start": 0,
         "end": 4.2,
         "speaker": "Nguyễn Văn A",
         "text": "Xin chào tất cả mọi người, cảm ơn các bạn đã tham gia cuộc họp hôm nay."
@@ -178,10 +178,10 @@
     "status": "DONE",
     "segments": [
       {
-        "start": 0.0,
+        "start": 0,
         "end": 3.8,
         "speaker": "Nguyễn Văn A",
-        "text": "Chào buổi sáng mọi người, hôm nay chúng ta sẽ review sprint vừa rồi."
+        "text": "Chào buổi sáng mọi người, hôm nay chúng ta sẽ review sprint vừa rồi.áđá"
       },
       {
         "start": 3.8,
@@ -250,7 +250,7 @@
     "status": "DONE",
     "segments": [
       {
-        "start": 0.0,
+        "start": 0,
         "end": 4.1,
         "speaker": "Nguyễn Văn A",
         "text": "Chào mọi người, hôm nay chúng ta sẽ thảo luận về kế hoạch Q2."

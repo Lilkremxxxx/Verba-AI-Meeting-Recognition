@@ -18,12 +18,15 @@ const PORT = process.env.PORT || 3000;
 // CORS configuration - allow frontend dev server
 const corsOptions = {
   origin: ["http://localhost:5173", "http://localhost:8080"],
-  methods: ["GET", "POST"],
-  allowedHeaders: ["Content-Type"],
+  methods: ["GET", "POST", "PATCH", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true,
 };
 
 app.use(cors(corsOptions));
+
+// Explicitly handle OPTIONS preflight requests
+app.options("*", cors(corsOptions));
 
 // Body parser for JSON (if needed for other endpoints)
 app.use(express.json());
