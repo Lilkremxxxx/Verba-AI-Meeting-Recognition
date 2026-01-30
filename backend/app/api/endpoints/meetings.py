@@ -1,6 +1,6 @@
 # Meetings endpoints
 import asyncio
-from fastapi import APIRouter, File, Form, UploadFile, HTTPException
+from fastapi import APIRouter, File, Form, UploadFile, HTTPException, Depends
 from pydantic import BaseModel
 from typing import List
 import os
@@ -8,6 +8,7 @@ import asyncpg
 from dotenv import load_dotenv
 from pathlib import Path
 import shutil
+from db.session import get_db
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent
 ENV_PATH = BASE_DIR / ".env"
@@ -28,23 +29,15 @@ print(f"Database config: {PG_HOST}:{PG_PORT}/{PG_DBNAME} user={PG_USER}")
 router = APIRouter()
 
 @router.get("/")
-async def get_all_meetings():
+async def get_all_meetings(db: asyncpg.Connection = Depends(get_db)):
     try:
         print("Attempting to connect to database...")
         
-        conn = await asyncpg.connect(
-                host=PG_HOST, 
-                port=int(PG_PORT), 
-                database=PG_DBNAME,
-                user=PG_USER, 
-                password=PG_PASSWORD,
-                timeout=10
-            )
         
         print("Connected to database successfully!")
         
-        rows = await conn.fetch('SELECT * FROM meetings;')
-        await conn.close()
+        rows = await db.fetch('SELECT * FROM meetings;')
+        await db.close()
         
         print(f"Fetched {len(rows)} rows from database")
         
@@ -80,7 +73,8 @@ async def get_all_meetings():
 @router.post("/upload")
 async def upload_single_meeting(
     title: str = Form(...),
-    audio: UploadFile = File(...)
+    audio: UploadFile = File(...),
+    db: asyncpg.Connection = Depends(get_db)
 ):
     """Upload single audio file with title"""
     try:
@@ -106,14 +100,8 @@ async def upload_single_meeting(
         
         print(f"File saved: {file_path}")
 
-        conn = await asyncpg.connect(
-            host=PG_HOST, 
-            port=int(PG_PORT),
-            database=PG_DBNAME,
-            user=PG_USER, 
-            password=PG_PASSWORD
-        )
-        await conn.execute(
+        
+        await db.execute(
             'INSERT INTO "meetings" ("user_id", "title", "original_filename", "storage_provider", "storage_path") VALUES ($1, $2, $3, $4, $5 )',
             "7b15afa6-f4e1-4005-a536-91ccd0f37e4b",title, audio.filename,"LOCAL", str(file_path)
         )
