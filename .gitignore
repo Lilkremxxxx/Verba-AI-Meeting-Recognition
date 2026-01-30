@@ -4,3 +4,6 @@ DAT301m/
 Guided_dtb/
 .env
 hf_token.txt
+.vscode/
+dist/
+node_modules/
