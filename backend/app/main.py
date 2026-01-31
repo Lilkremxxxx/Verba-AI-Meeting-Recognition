@@ -8,6 +8,7 @@ from typing import Annotated
 from db.session import create_pool, close_pool
 from db.session import create_pool, close_pool
 from api.endpoints.meetings import router as meetings_endpoint_router
+from api.endpoints.auth import router as login_router
 
 
 app = FastAPI(title="AI Meeting"title="AI Meeting")
@@ -40,6 +41,7 @@ app.add_middleware(
 
 
 app.include_router(meetings_endpoint_router, prefix="/meetings", tags=["meetings"])
+app.include_router(login_router, prefix="/auth", tags=["auth"])
 
 
 #Start + Stop server
