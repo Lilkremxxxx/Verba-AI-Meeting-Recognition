@@ -4,3 +4,12 @@ DAT301m/
 Guided_dtb/
 .env
 hf_token.txt
+.vscode/
+dist/
+node_modules/
+__pycache__/
+*.pyc
+__pycache__/
+*.pyc
+*.pyo
+*.pyd

@@ -37,7 +37,17 @@ export default function Login() {
   const onSubmit = async (data: LoginFormData) => {
     setIsLoading(true);
     try {
-      await login(data.email, data.password);
+      const result = await login(data.email, data.password);
+      
+      if (!result.success) {
+        toast({
+          variant: 'destructive',
+          title: 'Đăng nhập thất bại',
+          description: result.error || 'Email hoặc mật khẩu không đúng.',
+        });
+        return;
+      }
+      
       toast({
         title: 'Đăng nhập thành công',
         description: 'Chào mừng bạn quay trở lại!',
@@ -47,7 +57,7 @@ export default function Login() {
       toast({
         variant: 'destructive',
         title: 'Đăng nhập thất bại',
-        description: 'Email hoặc mật khẩu không đúng.',
+        description: 'Đã xảy ra lỗi không mong muốn.',
       });
     } finally {
       setIsLoading(false);

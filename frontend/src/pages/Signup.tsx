@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Loader2, AudioWaveform, Mail, Lock, User } from 'lucide-react';
+import { Loader2, AudioWaveform, Mail, Lock } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,7 +14,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 
 const signupSchema = z.object({
-  name: z.string().min(2, 'Tên phải có ít nhất 2 ký tự'),
   email: z.string().email('Email không hợp lệ'),
   password: z.string().min(6, 'Mật khẩu phải có ít nhất 6 ký tự'),
   confirmPassword: z.string(),
@@ -34,7 +33,6 @@ export default function Signup() {
   const form = useForm<SignupFormData>({
     resolver: zodResolver(signupSchema),
     defaultValues: {
-      name: '',
       email: '',
       password: '',
       confirmPassword: '',
@@ -44,7 +42,17 @@ export default function Signup() {
   const onSubmit = async (data: SignupFormData) => {
     setIsLoading(true);
     try {
-      await signup(data.email, data.password, data.name);
+      const result = await signup(data.email, data.password);
+      
+      if (!result.success) {
+        toast({
+          variant: 'destructive',
+          title: 'Đăng ký thất bại',
+          description: result.error || 'Email này đã tồn tại hoặc có lỗi xảy ra.',
+        });
+        return;
+      }
+      
       toast({
         title: 'Đăng ký thành công',
         description: 'Tài khoản của bạn đã được tạo!',
@@ -54,7 +62,7 @@ export default function Signup() {
       toast({
         variant: 'destructive',
         title: 'Đăng ký thất bại',
-        description: 'Có lỗi xảy ra. Vui lòng thử lại.',
+        description: 'Đã xảy ra lỗi không mong muốn.',
       });
     } finally {
       setIsLoading(false);
@@ -85,27 +93,6 @@ export default function Signup() {
           <CardContent>
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                <FormField
-                  control={form.control}
-                  name="name"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Họ và tên</FormLabel>
-                      <FormControl>
-                        <div className="relative">
-                          <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                          <Input 
-                            placeholder="Nguyễn Văn A" 
-                            className="pl-10"
-                            {...field} 
-                          />
-                        </div>
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
                 <FormField
                   control={form.control}
                   name="email"

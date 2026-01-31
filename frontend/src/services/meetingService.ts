@@ -7,6 +7,19 @@ import type { Meeting, TranscriptResponse, MeetingSummary, TranscriptSegment, Su
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
+/**
+ * Get authorization headers with Bearer token
+ */
+function getAuthHeaders(): HeadersInit {
+  const token = localStorage.getItem('verba_token');
+  if (!token) {
+    throw new Error('No authentication token found. Please login.');
+  }
+  return {
+    'Authorization': `Bearer ${token}`,
+  };
+}
+
 export interface CreateMeetingPayload {
   title: string;
   audio: File;
@@ -33,6 +46,7 @@ export async function createMeeting(
 
     const response = await fetch(`${API_BASE_URL}/meetings/upload`, {
       method: "POST",
+      headers: getAuthHeaders(),
       body: formData,
       // Don't set Content-Type header - browser will set it with boundary for multipart/form-data
     });
@@ -73,6 +87,7 @@ export async function getMeetings(): Promise<{
   try {
     const response = await fetch(`${API_BASE_URL}/meetings/`, {
       method: "GET",
+      headers: getAuthHeaders(),
     });
 
     if (!response.ok) {
