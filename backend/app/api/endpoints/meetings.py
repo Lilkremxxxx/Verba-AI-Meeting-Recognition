@@ -9,11 +9,12 @@ from dotenv import load_dotenv
 from pathlib import Path
 import shutil
 from db.session import get_db
+from api.endpoints.auth import get_current_user
+from schemas.user import UserOut
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent
 ENV_PATH = BASE_DIR / ".env"
 
-print(f"Loading .env from: {ENV_PATH}")
 
 load_dotenv(dotenv_path=ENV_PATH)
 PG_HOST = os.getenv("PG_HOST")
@@ -22,25 +23,20 @@ PG_DBNAME = os.getenv("PG_DBNAME")
 PG_USER = os.getenv("PG_USER")
 PG_PASSWORD = os.getenv("PG_PASSWORD")
 
-# In ra để kiểm tra
-print(f"Database config: {PG_HOST}:{PG_PORT}/{PG_DBNAME} user={PG_USER}")
-
-
 router = APIRouter()
 
 @router.get("/")
-async def get_all_meetings(db: asyncpg.Connection = Depends(get_db)):
+async def get_all_meetings(
+    db: asyncpg.Connection = Depends(get_db),
+    current_user: UserOut = Depends(get_current_user)
+):
+    """Get all meetings for current user"""
     try:
-        print("Attempting to connect to database...")
-        
-        
-        print("Connected to database successfully!")
-        
-        rows = await db.fetch('SELECT * FROM meetings;')
-        await db.close()
-        
-        print(f"Fetched {len(rows)} rows from database")
-        
+        # Chỉ lấy meetings của user hiện tại
+        rows = await db.fetch(
+            'SELECT * FROM meetings WHERE user_id = $1 ORDER BY created_at DESC',
+            current_user.id
+        )
         meetings = []
         for row in rows:
             try:
@@ -56,7 +52,7 @@ async def get_all_meetings(db: asyncpg.Connection = Depends(get_db)):
                 print(f"Row data: {dict(row)}")
                 continue
         
-        print(f"Successfully processed {len(meetings)} meetings")
+        print(f"Successfully processed {len(meetings)} meetings for user {current_user.email}")
         return meetings
         
     except asyncpg.PostgresError as db_error:
@@ -74,11 +70,12 @@ async def get_all_meetings(db: asyncpg.Connection = Depends(get_db)):
 async def upload_single_meeting(
     title: str = Form(...),
     audio: UploadFile = File(...),
-    db: asyncpg.Connection = Depends(get_db)
+    db: asyncpg.Connection = Depends(get_db),
+    current_user: UserOut = Depends(get_current_user)
 ):
     """Upload single audio file with title"""
     try:
-        print(f"[Single Upload] Title: {title}, File: {audio.filename}")
+        print(f"[Single Upload] User: {current_user.email}, Title: {title}, File: {audio.filename}")
         
         # Validate file
         filename, filetail = os.path.splitext(audio.filename)
@@ -100,12 +97,15 @@ async def upload_single_meeting(
         
         print(f"File saved: {file_path}")
 
-        
         await db.execute(
-            'INSERT INTO "meetings" ("user_id", "title", "original_filename", "storage_provider", "storage_path") VALUES ($1, $2, $3, $4, $5 )',
-            "7b15afa6-f4e1-4005-a536-91ccd0f37e4b",title, audio.filename,"LOCAL", str(file_path)
+            'INSERT INTO "meetings" ("user_id", "title", "original_filename", "storage_provider", "storage_path") VALUES ($1, $2, $3, $4, $5)',
+            current_user.id, 
+            title, 
+            audio.filename,
+            "LOCAL", 
+            str(file_path)
         )
-        print("Finish insert into dtb")
+        print(f"Finish insert into dtb for user: {current_user.id}")
         
         return {
             "success": True,
@@ -118,7 +118,7 @@ async def upload_single_meeting(
                 "status": "QUEUED"
             }
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -127,53 +127,64 @@ async def upload_single_meeting(
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
-
-
-@router.post("/uploads")
-async def meetings_upload(files: List[UploadFile] = File(...)):
-    """Upload audio files"""
-    saved_files = []
-    file_info = []
+# @router.post("/uploads")
+# async def meetings_upload(
+#     files: List[UploadFile] = File(...),
+#     db: asyncpg.Connection = Depends(get_db),
+#     current_user: UserOut = Depends(get_current_user)
+# ):
+#     """Upload multiple audio files"""
+#     saved_files = []
+#     file_info = []
     
-    for file in files:
-        try:
-            filename, filetail = os.path.splitext(file.filename)
-            filetail = filetail.lower().lstrip(".")
-            print(f"Processing: {filename}.{filetail}")
+#     for file in files:
+#         try:
+#             filename, filetail = os.path.splitext(file.filename)
+#             filetail = filetail.lower().lstrip(".")
+#             print(f"Processing: {filename}.{filetail} for user {current_user.email}")
             
-            if filetail not in ["mp3", "wav"]:
-                raise HTTPException(
-                    status_code=422, 
-                    detail=f"File {file.filename} Unsupported file format. Use: mp3, wav"
-                )
+#             if filetail not in ["mp3", "wav"]:
+#                 raise HTTPException(
+#                     status_code=422, 
+#                     detail=f"File {file.filename} Unsupported file format. Use: mp3, wav"
+#                 )
             
-            # Lưu file vào thư mục uploads
-            UPLOAD_DIR = BASE_DIR / "uploads"
-            UPLOAD_DIR.mkdir(exist_ok=True)
+#             # Lưu file vào thư mục uploads
+#             UPLOAD_DIR = BASE_DIR / "uploads"
+#             UPLOAD_DIR.mkdir(exist_ok=True)
         
-            file_path = UPLOAD_DIR / file.filename
-            with open(file_path, "wb") as buffer:
-                import shutil
-                shutil.copyfileobj(file.file, buffer)
+#             file_path = UPLOAD_DIR / file.filename
+#             with open(file_path, "wb") as buffer:
+#                 shutil.copyfileobj(file.file, buffer)
             
-            saved_files.append(str(file_path))
-            file_info.append({
-                "id": filename,
-                "filename": file.filename,
-                "path": str(file_path),
-                "size": file_path.stat().st_size,
-                "status": "uploaded"
-            })
+#             # Insert vào database với user_id
+#             await db.execute(
+#                 'INSERT INTO "meetings" ("user_id", "title", "original_filename", "storage_provider", "storage_path") VALUES ($1, $2, $3, $4, $5)',
+#                 current_user.id,
+#                 filename,  # Dùng filename làm title
+#                 file.filename,
+#                 "LOCAL",
+#                 str(file_path)
+#             )
             
-        except HTTPException:
-            raise
-        except Exception as e:
-            raise HTTPException(
-                status_code=500, 
-                detail=f"Failed to save {file.filename}: {str(e)}"
-            )
+#             saved_files.append(str(file_path))
+#             file_info.append({
+#                 "id": filename,
+#                 "filename": file.filename,
+#                 "path": str(file_path),
+#                 "size": file_path.stat().st_size,
+#                 "status": "uploaded"
+#             })
+            
+#         except HTTPException:
+#             raise
+#         except Exception as e:
+#             raise HTTPException(
+#                 status_code=500, 
+#                 detail=f"Failed to save {file.filename}: {str(e)}"
+#             )
     
-    return {
-        "message": "Files uploaded successfully",
-        "files": file_info
-    }
+#     return {
+#         "message": "Files uploaded successfully",
+#         "files": file_info
+#     }
