@@ -1,18 +1,19 @@
 import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import * as authService from '../services/authService';
 
 interface User {
-  id: string;
+  id: string; // UUID
   email: string;
-  name: string;
 }
 
 interface AuthContextType {
   user: User | null;
   token: string | null;
   isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  signup: (email: string, password: string, name: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  signup: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
+  isLoading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -27,41 +28,77 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return localStorage.getItem('verba_token');
   });
 
-  const login = useCallback(async (email: string, _password: string) => {
-    // Mock login - simulating API call
-    await new Promise(resolve => setTimeout(resolve, 800));
-    
-    const mockUser: User = {
-      id: 'user-' + Math.random().toString(36).substr(2, 9),
-      email,
-      name: email.split('@')[0],
-    };
-    
-    const mockToken = 'mock-jwt-token-' + Math.random().toString(36).substr(2, 16);
-    
-    setUser(mockUser);
-    setToken(mockToken);
-    localStorage.setItem('verba_user', JSON.stringify(mockUser));
-    localStorage.setItem('verba_token', mockToken);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const login = useCallback(async (email: string, password: string) => {
+    setIsLoading(true);
+    try {
+      const authResponse = await authService.login(email, password);
+      
+      if (!authResponse.success || !authResponse.data) {
+        setIsLoading(false);
+        return { 
+          success: false, 
+          error: authResponse.error || 'Login failed' 
+        };
+      }
+
+      const { access_token } = authResponse.data;
+      
+      // Get user info using the token
+      const userResponse = await authService.getCurrentUser(access_token);
+      
+      if (!userResponse.success || !userResponse.data) {
+        setIsLoading(false);
+        return { 
+          success: false, 
+          error: userResponse.error || 'Failed to get user information' 
+        };
+      }
+
+      const userData = userResponse.data;
+      
+      setUser(userData);
+      setToken(access_token);
+      localStorage.setItem('verba_user', JSON.stringify(userData));
+      localStorage.setItem('verba_token', access_token);
+      
+      setIsLoading(false);
+      return { success: true };
+    } catch (error) {
+      setIsLoading(false);
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'An unexpected error occurred' 
+      };
+    }
   }, []);
 
-  const signup = useCallback(async (email: string, _password: string, name: string) => {
-    // Mock signup - simulating API call
-    await new Promise(resolve => setTimeout(resolve, 800));
-    
-    const mockUser: User = {
-      id: 'user-' + Math.random().toString(36).substr(2, 9),
-      email,
-      name,
-    };
-    
-    const mockToken = 'mock-jwt-token-' + Math.random().toString(36).substr(2, 16);
-    
-    setUser(mockUser);
-    setToken(mockToken);
-    localStorage.setItem('verba_user', JSON.stringify(mockUser));
-    localStorage.setItem('verba_token', mockToken);
-  }, []);
+  const signup = useCallback(async (email: string, password: string) => {
+    setIsLoading(true);
+    try {
+      const registerResponse = await authService.register({ email, password });
+      
+      if (!registerResponse.success) {
+        setIsLoading(false);
+        return { 
+          success: false, 
+          error: registerResponse.error || 'Registration failed' 
+        };
+      }
+
+      // Auto login after successful registration
+      const loginResult = await login(email, password);
+      setIsLoading(false);
+      return loginResult;
+    } catch (error) {
+      setIsLoading(false);
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'An unexpected error occurred' 
+      };
+    }
+  }, [login]);
 
   const logout = useCallback(() => {
     setUser(null);
@@ -75,6 +112,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user, 
       token, 
       isAuthenticated: !!user && !!token,
+      isLoading,
       login, 
       signup, 
       logout 
