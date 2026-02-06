@@ -3,7 +3,12 @@ from pathlib import Path
 from .base import StorageError, StorageService
 
 class LocalStorageService(StorageService):
-    def __init__(self, base_dir="uploads", base_url="http://localhost:8000"):
+    def __init__(self, base_dir=None, base_url="http://localhost:8000"):
+        # Sử dụng absolute path đến backend/uploads
+        if base_dir is None:
+            # __file__ = backend/app/services/storage/local.py
+            # parent.parent.parent = backend/
+            base_dir = Path(__file__).resolve().parent.parent.parent.parent / "uploads"
         self.base_dir = Path(base_dir)
         self.base_dir.mkdir(exist_ok=True)
         self.base_url = base_url

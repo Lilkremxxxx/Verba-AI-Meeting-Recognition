@@ -164,7 +164,57 @@ async def upload_single_meeting(
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
 
-
+@router.delete("/{meeting_id}")
+async def delete_meeting(
+    meeting_id: str,
+    db: asyncpg.Connection = Depends(get_db),
+    current_user: UserOut = Depends(get_current_user)
+):
+    """Delete a meeting and its associated files"""
+    try:
+        # Kiểm tra meeting có tồn tại và thuộc về user hiện tại
+        row = await db.fetchrow(
+            'SELECT * FROM meetings WHERE id = $1',
+            meeting_id
+        )
+        
+        if not row:
+            raise HTTPException(status_code=404, detail="Meeting not found")
+            
+        if str(row["user_id"]) != str(current_user.id):
+            raise HTTPException(status_code=403, detail="Not authorized to delete this meeting")
+        
+        # Xóa file vật lý
+        storage = LocalStorageService()
+        storage_path = row["storage_path"]
+        
+        try:
+            storage.delete(storage_path)
+            print(f"Deleted file: {storage_path}")
+        except Exception as e:
+            print(f"Warning: Could not delete file {storage_path}: {e}")
+            # Tiếp tục xóa record trong database dù file không xóa được
+        
+        # Xóa record trong database
+        await db.execute(
+            'DELETE FROM meetings WHERE id = $1',
+            meeting_id
+        )
+        
+        print(f"Deleted meeting {meeting_id} for user {current_user.email}")
+        
+        return {
+            "success": True,
+            "message": "Meeting deleted successfully"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Delete error: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to delete meeting: {str(e)}")
 
 
 # @router.post("/uploads")

@@ -23,7 +23,8 @@ import {
   Sparkles,
   Download,
   FileText,
-  Save
+  Save,
+  Trash2
 } from "lucide-react";
 
 import { AppLayout } from "@/components/layout/AppLayout";
@@ -59,7 +60,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-import { getMeetingById, getTranscriptByMeetingId, updateTranscript, summarizeMeeting } from "@/services/meetingService";
+import { getMeetingById, getTranscriptByMeetingId, updateTranscript, summarizeMeeting, deleteMeeting } from "@/services/meetingService";
 import type { Meeting, TranscriptSegment, MeetingStatus, SummarizeResponse } from "@/types/meeting";
 import { formatTimeAgo } from "@/utils/time";
 import { exportMeetingToDocx } from "@/utils/exportDocx";
@@ -105,6 +106,10 @@ export default function MeetingDetailPage() {
   const [exportIncludeSummary, setExportIncludeSummary] = useState(true);
   const [exportIncludeTranscript, setExportIncludeTranscript] = useState(true);
   const [exporting, setExporting] = useState(false);
+  
+  // Delete dialog state
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   
   // Refs
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -267,6 +272,36 @@ export default function MeetingDetailPage() {
       setExporting(false);
     }
   }, [meeting, segments, summary, exportIncludeSummary, exportIncludeTranscript]);
+
+  const handleDelete = useCallback(async () => {
+    if (!id) return;
+
+    setDeleting(true);
+    try {
+      const result = await deleteMeeting(id);
+      
+      if (result.success) {
+        toast({
+          title: "Đã xóa cuộc họp",
+          description: "Cuộc họp đã được xóa thành công.",
+        });
+        // Redirect to dashboard after successful delete
+        navigate("/meetings");
+      } else {
+        throw new Error(result.error || "Không thể xóa cuộc họp");
+      }
+    } catch (err) {
+      console.error("Delete failed:", err);
+      toast({
+        title: "Xóa thất bại",
+        description: err instanceof Error ? err.message : "Không thể xóa cuộc họp. Vui lòng thử lại.",
+        variant: "destructive",
+      });
+    } finally {
+      setDeleting(false);
+      setDeleteDialogOpen(false);
+    }
+  }, [id, navigate, toast]);
 
   const handleSummarize = useCallback(async () => {
     if (!id || segments.length === 0) {
@@ -486,15 +521,25 @@ export default function MeetingDetailPage() {
             </div>
           </div>
 
-          {/* Export Button */}
-          <Button
-            variant="outline"
-            onClick={() => setExportDialogOpen(true)}
-            className="gap-2"
-          >
-            <Download className="h-4 w-4" />
-            Xuất DOCX
-          </Button>
+          {/* Action Buttons */}
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setExportDialogOpen(true)}
+              className="gap-2"
+            >
+              <Download className="h-4 w-4" />
+              Xuất DOCX
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => setDeleteDialogOpen(true)}
+              className="gap-2"
+            >
+              <Trash2 className="h-4 w-4" />
+              Xóa
+            </Button>
+          </div>
         </div>
 
         <Separator />
@@ -856,6 +901,46 @@ export default function MeetingDetailPage() {
                   <>
                     <Download className="h-4 w-4" />
                     Xuất file
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Delete Confirmation Dialog */}
+        <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Xác nhận xóa cuộc họp</DialogTitle>
+              <DialogDescription>
+                Bạn có chắc chắn muốn xóa cuộc họp "{meeting.title}"? Hành động này không thể hoàn tác.
+              </DialogDescription>
+            </DialogHeader>
+
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setDeleteDialogOpen(false)}
+                disabled={deleting}
+              >
+                Hủy
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleDelete}
+                disabled={deleting}
+                className="gap-2"
+              >
+                {deleting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Đang xóa...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="h-4 w-4" />
+                    Xóa cuộc họp
                   </>
                 )}
               </Button>

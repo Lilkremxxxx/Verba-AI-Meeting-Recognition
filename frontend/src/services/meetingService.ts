@@ -336,3 +336,41 @@ export async function summarizeMeeting(
     };
   }
 }
+
+/**
+ * Deletes a meeting
+ * @param id - Meeting ID
+ * @returns Promise with success status or error
+ */
+export async function deleteMeeting(id: string): Promise<{
+  success: boolean;
+  error?: string;
+}> {
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/meetings/${encodeURIComponent(id)}`,
+      {
+        method: "DELETE",
+        headers: getAuthHeaders(),
+      },
+    );
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(
+        errorData.detail || errorData.message || `HTTP error! status: ${response.status}`,
+      );
+    }
+
+    return {
+      success: true,
+    };
+  } catch (error) {
+    console.error("Error deleting meeting:", error);
+
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to delete meeting",
+    };
+  }
+}
