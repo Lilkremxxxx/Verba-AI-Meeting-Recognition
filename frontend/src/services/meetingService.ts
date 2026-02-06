@@ -129,13 +129,14 @@ export async function getMeetingById(id: string): Promise<{
       `${API_BASE_URL}/meetings/${encodeURIComponent(id)}`,
       {
         method: "GET",
+        headers: getAuthHeaders(),
       },
     );
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       throw new Error(
-        errorData.message || `HTTP error! status: ${response.status}`,
+        errorData.detail || errorData.message || `HTTP error! status: ${response.status}`,
       );
     }
 

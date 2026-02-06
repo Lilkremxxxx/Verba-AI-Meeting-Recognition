@@ -499,6 +499,26 @@ export default function MeetingDetailPage() {
 
         <Separator />
 
+        {/* Meeting Metadata */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5" />
+              Thông tin cuộc họp
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+              <div><span className="font-medium">ID:</span> <span className="font-mono">{meeting.id}</span></div>
+              <div><span className="font-medium">Tiêu đề:</span> {meeting.title}</div>
+              <div><span className="font-medium">Trạng thái:</span> {getStatusBadge(meeting.status)}</div>
+              <div><span className="font-medium">Tên file gốc:</span> {meeting.original_filename}</div>
+              <div><span className="font-medium">Ngày tạo:</span> {formatTimeAgo(meeting.created_at)}</div>
+              <div><span className="font-medium">Đường dẫn file:</span> <span className="font-mono break-all">{meeting.audioUrl || "(Chưa có)"}</span></div>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Audio Player */}
         <Card>
           <CardHeader>
@@ -524,7 +544,6 @@ export default function MeetingDetailPage() {
                   onLoadedMetadata={handleLoadedMetadata}
                   onEnded={() => setIsPlaying(false)}
                 />
-                
                 <div className="space-y-4">
                   {/* Playback Controls */}
                   <div className="flex items-center gap-4">
@@ -536,7 +555,6 @@ export default function MeetingDetailPage() {
                     >
                       <SkipBack className="h-4 w-4" />
                     </Button>
-
                     <Button
                       size="lg"
                       variant="default"
@@ -555,7 +573,6 @@ export default function MeetingDetailPage() {
                         </>
                       )}
                     </Button>
-
                     <Button
                       size="icon"
                       variant="outline"
@@ -564,7 +581,6 @@ export default function MeetingDetailPage() {
                     >
                       <SkipForward className="h-4 w-4" />
                     </Button>
-
                     {/* Playback Speed */}
                     <div className="flex items-center gap-2">
                       <span className="text-sm text-muted-foreground">Tốc độ:</span>
@@ -582,7 +598,6 @@ export default function MeetingDetailPage() {
                       </Select>
                     </div>
                   </div>
-
                   {/* Progress Bar */}
                   <div className="flex-1 space-y-1">
                     <div className="flex items-center justify-between text-sm text-muted-foreground">
