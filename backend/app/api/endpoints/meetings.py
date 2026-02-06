@@ -11,6 +11,7 @@ import shutil
 from db.session import get_db
 from api.endpoints.auth import get_current_user
 from schemas.user import UserOut
+from services.storage.local import LocalStorageService
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent
 ENV_PATH = BASE_DIR / ".env"
@@ -64,7 +65,38 @@ async def get_all_meetings(
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Failed to fetch meetings: {str(e)}")
 
- 
+
+@router.get("/{meeting_id}")
+async def get_all_meetings(meeting_id: str,
+    db: asyncpg.Connection = Depends(get_db),
+    current_user: UserOut = Depends(get_current_user)
+):
+    """Get all meetings for current user"""
+    try: 
+        row = await db.fetchrow(
+            'select * from meetings where id =$1', meeting_id
+        )
+        if not row:
+            raise HTTPException(status_code = 404, detail ="Meeting not found")
+        if str(row["user_id"]) != str(current_user.id):
+            raise HTTPException(status_code = 404, detail ="Not owner of meeting not found")
+        storage = LocalStorageService()
+        audio_url = storage.get_url(row["storage_path"])
+        return {
+            "id": str(row["id"]),
+            "title": row["title"],
+            "status": row["status"],
+            "original_filename": row["original_filename"],
+            "created_at": row["created_at"].isoformat(),
+            "audioUrl": audio_url
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code = 500, detail = "Internal server error")
  
 
 @router.post("/upload")
@@ -77,45 +109,48 @@ async def upload_single_meeting(
     """Upload single audio file with title"""
     try:
         print(f"[Single Upload] User: {current_user.email}, Title: {title}, File: {audio.filename}")
-        
+
         # Validate file
         filename, filetail = os.path.splitext(audio.filename)
         filetail = filetail.lower().lstrip(".")
-        
         if filetail not in ["mp3", "wav"]:
             raise HTTPException(
-                status_code=422, 
+                status_code=422,
                 detail=f"Unsupported format: {filetail}. Use mp3 or wav"
             )
-        
-        # Save file
-        UPLOAD_DIR = BASE_DIR / "uploads"
-        UPLOAD_DIR.mkdir(exist_ok=True)
-        
-        file_path = UPLOAD_DIR / audio.filename
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(audio.file, buffer)
-        
-        print(f"File saved: {file_path}")
+
+        # Tạo meeting_id (UUID4)
+        import uuid
+        meeting_id = str(uuid.uuid4())
+        user_id = str(current_user.id)
+        storage = LocalStorageService()
+        storage_path = f"{user_id}/{meeting_id}/{audio.filename}"
+        # Lưu file vào đúng thư mục
+        saved_path = storage.save_file(audio.file, storage_path)
+
+        print(f"File saved: {saved_path}")
 
         await db.execute(
-            'INSERT INTO "meetings" ("user_id", "title", "original_filename", "storage_provider", "storage_path") VALUES ($1, $2, $3, $4, $5)',
-            current_user.id, 
-            title, 
+            'INSERT INTO "meetings" ("id", "user_id", "title", "original_filename", "storage_provider", "storage_path", "status") VALUES ($1, $2, $3, $4, $5, $6, $7)',
+            meeting_id,
+            current_user.id,
+            title,
             audio.filename,
-            "LOCAL", 
-            str(file_path)
+            "LOCAL",
+            storage_path,
+            "QUEUED"
         )
         print(f"Finish insert into dtb for user: {current_user.id}")
-        
+
+        file_stat = os.stat(saved_path)
         return {
             "success": True,
             "data": {
-                "id": filename,
+                "id": meeting_id,
                 "title": title,
                 "filename": audio.filename,
-                "path": str(file_path),
-                "size": file_path.stat().st_size,
+                "path": saved_path,
+                "size": file_stat.st_size,
                 "status": "QUEUED"
             }
         }
@@ -127,9 +162,6 @@ async def upload_single_meeting(
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
-
-##hell##
-
 
 
 

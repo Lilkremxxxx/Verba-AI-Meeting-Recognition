@@ -23,9 +23,9 @@ class StorageService(ABC):
     """
 
     @abstractmethod
-    def upload(self, file: BinaryIO, user_id: str, meeting_id: str, filename: str) -> str:
+    def save_file(self, file_obj, filename) -> str:
         """
-        Upload a file to the storage provider.
+        Save file, return path.
         
         Args:
             file: Binary file object to upload

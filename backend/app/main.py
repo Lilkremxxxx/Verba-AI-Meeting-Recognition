@@ -1,13 +1,18 @@
 # Main application
 import time
 import asyncio
+from pathlib import Path
 from fastapi import FastAPI, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import Annotated
 from db.session import create_pool, close_pool
 from api.endpoints.meetings import router as meetings_endpoint_router
 from api.endpoints.auth import router as login_router
+
+# Base directory
+BASE_DIR = Path(__file__).resolve().parent.parent
 
 
 app = FastAPI(title="AI Meeting")
@@ -39,6 +44,11 @@ app.add_middleware(
 
 app.include_router(meetings_endpoint_router, prefix="/meetings", tags=["meetings"])
 app.include_router(login_router, prefix="/auth", tags=["auth"])
+
+# Mount static files để serve audio
+UPLOAD_DIR = BASE_DIR / "uploads"
+UPLOAD_DIR.mkdir(exist_ok=True)
+app.mount("/media", StaticFiles(directory=str(UPLOAD_DIR)), name="media")
 
 
 #Start + Stop server
