@@ -8,4 +8,4 @@ dotenv
 pydantic
 python-jose
 passlib
-bcrypt
+argon2-cffi
