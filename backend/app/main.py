@@ -6,20 +6,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Annotated
 from db.session import create_pool, close_pool
-from db.session import create_pool, close_pool
 from api.endpoints.meetings import router as meetings_endpoint_router
 from api.endpoints.auth import router as login_router
 
 
-app = FastAPI(title="AI Meeting"title="AI Meeting")
+app = FastAPI(title="AI Meeting")
 #CROs middleware
 origins =[
     "http://localhost:8000",
     "http://localhost:5173",
     "http://localhost:8080",
 ]
-
-
 
 #Middleware
 @app.middleware("http")
@@ -59,21 +56,6 @@ async def shutdown_event():
     await close_pool()
     print("✅ Server stopped!")
 
-
-
-@app.on_event("startup")
-async def startup_event():
-    """Chạy khi server khởi động"""
-    print("🚀 Starting server...")
-    await create_pool()
-    print("✅ Server ready!")
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Chạy khi server shutdown"""
-    print("🛑 Shutting down server...")
-    await close_pool()
-    print("✅ Server stopped!")
 
 
 class Item(BaseModel):
