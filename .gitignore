@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Logs
 logs
 *.log
@@ -22,3 +23,27 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+=======
+Dataset/
+Demo/
+.github/
+DAT301m/
+Guided_dtb/
+.env
+hf_token.txt
+.vscode/
+dist/
+node_modules/
+__pycache__/
+*.pyc
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+.vscode/
+dist/
+node_modules/
+__pycache__/
+*.pyc
+>>>>>>> 5ca123bb770e80f50eeffa433878542b00e8eda3

@@ -1,0 +1,326 @@
+{
+  "demo-done-meeting": {
+    "meeting_id": "demo-done-meeting",
+    "status": "DONE",
+    "segments": [
+      {
+        "start": 0.0,
+        "end": 3.5,
+        "speaker": "Nguyễn Văn A",
+        "text": "Chào mọi người, hôm nay chúng ta sẽ thảo luận về dự án mới."
+      },
+      {
+        "start": 3.5,
+        "end": 7.2,
+        "speaker": "Trần Thị B",
+        "text": "Tôi nghĩ chúng ta nên tập trung vào việc cải thiện trải nghiệm người dùng."
+      },
+      {
+        "start": 7.2,
+        "end": 11.8,
+        "speaker": "Lê Văn C",
+        "text": "Đúng vậy, và chúng ta cũng cần xem xét về hiệu suất của hệ thống."
+      },
+      {
+        "start": 11.8,
+        "end": 15.3,
+        "speaker": "Nguyễn Văn A",
+        "text": "Theo tôi, chúng ta nên ưu tiên các tính năng quan trọng nhất trước."
+      },
+      {
+        "start": 15.3,
+        "end": 19.5,
+        "speaker": "Phạm Thị D",
+        "text": "Tôi đồng ý. Chúng ta có thể bắt đầu với module đăng nhập và xác thực."
+      },
+      {
+        "start": 19.5,
+        "end": 22.8,
+        "speaker": "Trần Thị B",
+        "text": "Về mặt kỹ thuật, chúng ta sẽ sử dụng công nghệ nào?"
+      },
+      {
+        "start": 22.8,
+        "end": 26.4,
+        "speaker": "Lê Văn C",
+        "text": "Tôi đề xuất sử dụng React và TypeScript cho frontend."
+      },
+      {
+        "start": 26.4,
+        "end": 29.7,
+        "speaker": "Nguyễn Văn A",
+        "text": "Còn backend thì sao? Chúng ta có nên dùng Node.js không?"
+      },
+      {
+        "start": 29.7,
+        "end": 33.9,
+        "speaker": "Phạm Thị D",
+        "text": "Đúng, Node.js với Express sẽ phù hợp cho dự án này."
+      },
+      {
+        "start": 33.9,
+        "end": 37.2,
+        "speaker": "Trần Thị B",
+        "text": "Chúng ta cần bao nhiêu thời gian để hoàn thành giai đoạn đầu?"
+      },
+      {
+        "start": 37.2,
+        "end": 40.5,
+        "speaker": "Lê Văn C",
+        "text": "Tôi ước tính khoảng 2-3 tuần cho MVP."
+      },
+      {
+        "start": 40.5,
+        "end": 44.1,
+        "speaker": "Nguyễn Văn A",
+        "text": "Được rồi, vậy chúng ta sẽ phân công công việc như thế nào?"
+      },
+      {
+        "start": 44.1,
+        "end": 47.8,
+        "speaker": "Phạm Thị D",
+        "text": "Tôi sẽ đảm nhận phần frontend và UI/UX."
+      },
+      {
+        "start": 47.8,
+        "end": 51.3,
+        "speaker": "Trần Thị B",
+        "text": "Tôi có thể làm backend và API integration."
+      },
+      {
+        "start": 51.3,
+        "end": 54.5,
+        "speaker": "Lê Văn C",
+        "text": "Cảm ơn mọi người đã tham gia cuộc họp hôm nay."
+      }
+    ]
+  },
+  "5f7e4de4-dc55-4805-a6e6-8f798ffc316d": {
+    "meeting_id": "5f7e4de4-dc55-4805-a6e6-8f798ffc316d",
+    "status": "DONE",
+    "segments": [
+      {
+        "start": 0.0,
+        "end": 4.2,
+        "speaker": "Nguyễn Văn A",
+        "text": "Xin chào tất cả mọi người, cảm ơn các bạn đã tham gia cuộc họp hôm nay."
+      },
+      {
+        "start": 4.2,
+        "end": 8.5,
+        "speaker": "Trần Thị B",
+        "text": "Chúng ta hãy bắt đầu với việc xem xét tiến độ dự án hiện tại."
+      },
+      {
+        "start": 8.5,
+        "end": 13.1,
+        "speaker": "Lê Văn C",
+        "text": "Tuần này chúng ta đã hoàn thành được 80% các tính năng cơ bản."
+      },
+      {
+        "start": 13.1,
+        "end": 17.3,
+        "speaker": "Phạm Thị D",
+        "text": "Tuy nhiên vẫn còn một số vấn đề về hiệu suất cần được giải quyết."
+      },
+      {
+        "start": 17.3,
+        "end": 21.8,
+        "speaker": "Nguyễn Văn A",
+        "text": "Được rồi, chúng ta sẽ ưu tiên xử lý các vấn đề về hiệu suất trước."
+      },
+      {
+        "start": 21.8,
+        "end": 25.4,
+        "speaker": "Trần Thị B",
+        "text": "Tôi sẽ làm việc với team backend để tối ưu hóa các API."
+      },
+      {
+        "start": 25.4,
+        "end": 29.6,
+        "speaker": "Lê Văn C",
+        "text": "Còn về phần testing, chúng ta đã viết được bao nhiêu test cases?"
+      },
+      {
+        "start": 29.6,
+        "end": 33.2,
+        "speaker": "Phạm Thị D",
+        "text": "Hiện tại đã có khoảng 150 test cases, coverage đạt 75%."
+      },
+      {
+        "start": 33.2,
+        "end": 37.5,
+        "speaker": "Nguyễn Văn A",
+        "text": "Tốt lắm, chúng ta cần đạt ít nhất 80% coverage trước khi release."
+      },
+      {
+        "start": 37.5,
+        "end": 41.8,
+        "speaker": "Trần Thị B",
+        "text": "Vậy timeline cho bản release tiếp theo là khi nào?"
+      },
+      {
+        "start": 41.8,
+        "end": 45.3,
+        "speaker": "Lê Văn C",
+        "text": "Nếu mọi thứ suôn sẻ, chúng ta có thể release vào cuối tuần sau."
+      },
+      {
+        "start": 45.3,
+        "end": 48.9,
+        "speaker": "Phạm Thị D",
+        "text": "Tuyệt vời, tôi sẽ chuẩn bị tài liệu release notes."
+      }
+    ]
+  },
+  "d9b755cc-dfd0-4184-9b8a-daa9797bb077": {
+    "meeting_id": "d9b755cc-dfd0-4184-9b8a-daa9797bb077",
+    "status": "DONE",
+    "segments": [
+      {
+        "start": 0.0,
+        "end": 3.8,
+        "speaker": "Nguyễn Văn A",
+        "text": "Chào buổi sáng mọi người, hôm nay chúng ta sẽ review sprint vừa rồi."
+      },
+      {
+        "start": 3.8,
+        "end": 7.5,
+        "speaker": "Trần Thị B",
+        "text": "Sprint này chúng ta đã hoàn thành 12 trong số 15 tasks."
+      },
+      {
+        "start": 7.5,
+        "end": 11.2,
+        "speaker": "Lê Văn C",
+        "text": "Ba tasks còn lại sẽ được chuyển sang sprint tiếp theo."
+      },
+      {
+        "start": 11.2,
+        "end": 15.6,
+        "speaker": "Phạm Thị D",
+        "text": "Chúng ta gặp một số khó khăn với việc tích hợp payment gateway."
+      },
+      {
+        "start": 15.6,
+        "end": 19.3,
+        "speaker": "Nguyễn Văn A",
+        "text": "Vấn đề chính là gì? Có phải do documentation không đầy đủ?"
+      },
+      {
+        "start": 19.3,
+        "end": 23.7,
+        "speaker": "Trần Thị B",
+        "text": "Đúng vậy, và API của họ cũng có một số thay đổi chưa được cập nhật."
+      },
+      {
+        "start": 23.7,
+        "end": 27.4,
+        "speaker": "Lê Văn C",
+        "text": "Tôi đã liên hệ với support team của họ và đang chờ phản hồi."
+      },
+      {
+        "start": 27.4,
+        "end": 31.8,
+        "speaker": "Phạm Thị D",
+        "text": "Trong lúc chờ, chúng ta có thể làm việc với sandbox environment trước."
+      },
+      {
+        "start": 31.8,
+        "end": 35.5,
+        "speaker": "Nguyễn Văn A",
+        "text": "Ý tưởng hay đấy, vậy chúng ta sẽ tiếp tục như vậy."
+      },
+      {
+        "start": 35.5,
+        "end": 39.2,
+        "speaker": "Trần Thị B",
+        "text": "Còn về phần UI, team design đã gửi mockups mới chưa?"
+      },
+      {
+        "start": 39.2,
+        "end": 42.8,
+        "speaker": "Lê Văn C",
+        "text": "Rồi, họ gửi sáng nay. Tôi sẽ forward cho mọi người sau cuộc họp."
+      }
+    ]
+  },
+  "4578a1bf-1c02-4cc8-9b1b-190a57589a04": {
+    "meeting_id": "4578a1bf-1c02-4cc8-9b1b-190a57589a04",
+    "status": "DONE",
+    "segments": [
+      {
+        "start": 0.0,
+        "end": 4.1,
+        "speaker": "Nguyễn Văn A",
+        "text": "Chào mọi người, hôm nay chúng ta sẽ thảo luận về kế hoạch Q2."
+      },
+      {
+        "start": 4.1,
+        "end": 8.3,
+        "speaker": "Trần Thị B",
+        "text": "Mục tiêu chính của Q2 là tăng user base lên 50%."
+      },
+      {
+        "start": 8.3,
+        "end": 12.7,
+        "speaker": "Lê Văn C",
+        "text": "Để đạt được điều đó, chúng ta cần cải thiện marketing strategy."
+      },
+      {
+        "start": 12.7,
+        "end": 16.9,
+        "speaker": "Phạm Thị D",
+        "text": "Tôi đề xuất chúng ta tập trung vào social media marketing."
+      },
+      {
+        "start": 16.9,
+        "end": 20.5,
+        "speaker": "Nguyễn Văn A",
+        "text": "Đồng ý, và chúng ta cũng nên làm content marketing."
+      },
+      {
+        "start": 20.5,
+        "end": 24.8,
+        "speaker": "Trần Thị B",
+        "text": "Về budget, chúng ta có bao nhiêu cho marketing campaign?"
+      },
+      {
+        "start": 24.8,
+        "end": 28.4,
+        "speaker": "Lê Văn C",
+        "text": "Budget được phê duyệt là 50 triệu cho cả quý."
+      },
+      {
+        "start": 28.4,
+        "end": 32.6,
+        "speaker": "Phạm Thị D",
+        "text": "Với số tiền đó, chúng ta có thể chạy campaign trên nhiều platform."
+      },
+      {
+        "start": 32.6,
+        "end": 36.3,
+        "speaker": "Nguyễn Văn A",
+        "text": "Tốt, vậy ai sẽ phụ trách việc lên kế hoạch chi tiết?"
+      },
+      {
+        "start": 36.3,
+        "end": 39.9,
+        "speaker": "Trần Thị B",
+        "text": "Tôi sẽ làm việc với marketing team để lên plan cụ thể."
+      },
+      {
+        "start": 39.9,
+        "end": 43.5,
+        "speaker": "Lê Văn C",
+        "text": "Và tôi sẽ theo dõi metrics để đánh giá hiệu quả."
+      },
+      {
+        "start": 43.5,
+        "end": 47.2,
+        "speaker": "Phạm Thị D",
+        "text": "Cảm ơn mọi người, chúng ta sẽ họp lại vào tuần sau."
+      }
+    ]
+  }
+}
