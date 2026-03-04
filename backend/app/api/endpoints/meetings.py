@@ -43,6 +43,11 @@ class SummarizeResponse(BaseModel):
     summary: str
 
 
+class GetSummaryResponse(BaseModel):
+    meeting_id: str
+    summary: Optional[str] = None
+
+
 # ============ Helper Functions ============
 
 async def get_meeting(db: asyncpg.Connection, meeting_id: str) -> Optional[dict]:
@@ -451,3 +456,44 @@ async def summarize_meeting(
     except Exception as e:
         logger.error(f"[Summarize] Unexpected error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Summarize failed: {str(e)}")
+
+
+@router.get("/{meeting_id}/summary", response_model=GetSummaryResponse)
+async def get_meeting_summary(
+    meeting_id: str,
+    db: asyncpg.Connection = Depends(get_db),
+    current_user: UserOut = Depends(get_current_user)
+):
+    """
+    Get summary của meeting theo ID
+    
+    - Chỉ đọc summary từ DB
+    - Không generate summary mới
+    - Trả về summary nếu có, null nếu chưa có
+    """
+    try:
+        # Query meeting và summary từ DB
+        row = await db.fetchrow(
+            """
+            SELECT id, summary
+            FROM meetings 
+            WHERE id = $1
+            """,
+            meeting_id
+        )
+        
+        if not row:
+            raise HTTPException(status_code=404, detail="Meeting not found")
+        
+        # Trả về summary (có thể null nếu chưa generate)
+        return GetSummaryResponse(
+            meeting_id=str(row["id"]),
+            summary=row["summary"]
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[GetSummary] Unexpected error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to get summary: {str(e)}")
+
