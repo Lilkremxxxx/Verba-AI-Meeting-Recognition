@@ -171,6 +171,7 @@ export async function getTranscriptByMeetingId(id: string): Promise<{
       `${API_BASE_URL}/meetings/${encodeURIComponent(id)}/transcript`,
       {
         method: "GET",
+        headers: getAuthHeaders(),
       },
     );
 
@@ -200,12 +201,12 @@ export async function getTranscriptByMeetingId(id: string): Promise<{
 /**
  * Updates edited segments in transcript
  * @param id - Meeting ID
- * @param editedSegments - Array of {index, text} objects
+ * @param editedSegments - Full segments array (replace-all)
  * @returns Promise with updated transcript or error
  */
 export async function updateTranscript(
   id: string,
-  editedSegments: Array<{ index: number; text: string }>
+  editedSegments: TranscriptSegment[]
 ): Promise<{
   success: boolean;
   data?: TranscriptResponse;
@@ -217,6 +218,7 @@ export async function updateTranscript(
       {
         method: "PATCH",
         headers: {
+          ...getAuthHeaders(),
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ segments: editedSegments }),
@@ -289,9 +291,9 @@ export async function getMeetingSummaryById(id: string): Promise<{
 }
 
 /**
- * Generate summary from transcript segments (frontend-driven)
+ * Generate summary from transcript segments
  * @param id - Meeting ID
- * @param segments - Current transcript segments from frontend state
+ * @param segments - Current transcript segments
  * @returns Promise with summary data or error
  */
 export async function summarizeMeeting(
@@ -304,13 +306,14 @@ export async function summarizeMeeting(
 }> {
   try {
     const response = await fetch(
-      `${API_BASE_URL}/meetings/${encodeURIComponent(id)}/summarize`,
+      `${API_BASE_URL}/summarize`,
       {
         method: "POST",
         headers: {
+          ...getAuthHeaders(),
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ segments }),
+        body: JSON.stringify({ id, segments }),
       },
     );
 
@@ -333,6 +336,51 @@ export async function summarizeMeeting(
     return {
       success: false,
       error: error instanceof Error ? error.message : "Failed to generate summary",
+    };
+  }
+}
+
+/**
+ * Starts transcription for a meeting
+ * @param id - Meeting ID
+ * @param language - Language code (default: "vi")
+ * @returns Promise with success status or error
+ */
+export async function startTranscription(
+  id: string,
+  language: string = "vi"
+): Promise<{
+  success: boolean;
+  data?: { message: string; meeting_id: string };
+  error?: string;
+}> {
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/meetings/${encodeURIComponent(id)}/transcribe`,
+      {
+        method: "POST",
+        headers: {
+          ...getAuthHeaders(),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ language }),
+      },
+    );
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(
+        errorData.detail || errorData.message || `HTTP error! status: ${response.status}`,
+      );
+    }
+
+    const data = await response.json();
+    return { success: true, data };
+  } catch (error) {
+    console.error("Error starting transcription:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to start transcription",
     };
   }
 }

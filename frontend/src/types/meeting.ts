@@ -39,14 +39,14 @@ export interface MeetingSummary {
   summary: string;
 }
 
-// Summary request payload (POST /meetings/:id/summarize)
+// Summary request payload (POST /summarize)
 export interface SummarizeRequest {
+  id: string;
   segments: TranscriptSegment[];
 }
 
-// Summary response from POST /meetings/:id/summarize
+// Summary response from POST /summarize
 export interface SummarizeResponse {
-  meeting_id: string;
-  status: MeetingStatus;
+  id: string;
   summary: string;
 }

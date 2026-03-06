@@ -10,20 +10,31 @@ from typing import Annotated
 from db.session import create_pool, close_pool
 from api.endpoints.meetings import router as meetings_endpoint_router
 from api.endpoints.auth import router as login_router
+from api.endpoints.transcripts import router as transcripts_router
+from api.endpoints.summarize import router as summarize_router
 
 # Base directory
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
 app = FastAPI(title="AI Meeting")
-#CROs middleware
-origins =[
+
+# CORS must be added FIRST (outermost) so preflight OPTIONS is handled before other middleware
+origins = [
     "http://localhost:8000",
     "http://localhost:5173",
     "http://localhost:8080",
 ]
 
-#Middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Timing middleware — added AFTER CORS so it runs inside CORS layer
 @app.middleware("http")
 async def start_time(request: Request, call_next):
     start_time = time.perf_counter()
@@ -32,18 +43,12 @@ async def start_time(request: Request, call_next):
     response.headers["X-Process-Time"] = str(process_time)
     return response
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins = origins,
-    allow_credentials = True,
-    allow_methods = ["*"],
-    allow_headers = ["*"],
-)
-
 
 
 app.include_router(meetings_endpoint_router, prefix="/meetings", tags=["meetings"])
 app.include_router(login_router, prefix="/auth", tags=["auth"])
+app.include_router(transcripts_router, prefix="/meetings", tags=["transcripts"])
+app.include_router(summarize_router, prefix="", tags=["summarize"])
 
 # Mount static files để serve audio
 UPLOAD_DIR = BASE_DIR / "uploads"

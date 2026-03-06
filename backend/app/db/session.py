@@ -43,10 +43,15 @@ async def close_pool():
 async def get_db():
     """Dependency để lấy connection từ pool"""
     global _pool
-    
+
     if _pool is None:
         await create_pool()
-    
+
     async with _pool.acquire() as connection:
         yield connection
+
+
+def get_pool() -> asyncpg.Pool:
+    """Trả về pool trực tiếp — dùng trong background tasks (không dùng được Depends)"""
+    return _pool
 
