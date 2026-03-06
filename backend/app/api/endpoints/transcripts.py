@@ -54,7 +54,12 @@ async def get_transcript(
     if not meeting:
         raise HTTPException(404, "Meeting not found")
 
-    segments = meeting["transcript_json"] or []
+    import json
+    raw = meeting["transcript_json"]
+    if isinstance(raw, str):
+        segments = json.loads(raw)
+    else:
+        segments = raw or []
 
     return TranscriptOut(
         meeting_id=meeting_id,
@@ -92,12 +97,15 @@ async def process_transcription(meeting_id: str, audio_path: str, language: str)
             model=model,
             tokenizer=processor.tokenizer,
             feature_extractor=processor.feature_extractor,
+            chunk_length_s=30,        # Chia audio thành chunk 30s để tránh mất timestamp cuối
+            stride_length_s=5,        # Overlap 5s giữa các chunk
         )
 
         # Bước 4: Chạy transcription, lấy timestamps theo chunks
         return transcriber(
             {"array": audio_16khz, "sampling_rate": 16000},
             return_timestamps=True,
+            generate_kwargs={"language": "vietnamese", "task": "transcribe"},
         )
 
     try:
@@ -120,8 +128,15 @@ async def process_transcription(meeting_id: str, audio_path: str, language: str)
 
         # Build segments list để lưu vào transcript_json (jsonb)
         segments = []
-        for chunk in chunks:
+        # Tính tổng độ dài audio để fallback cho chunk cuối thiếu end
+        import librosa as _librosa
+        audio_duration = _librosa.get_duration(path=full_audio_path)
+        for i, chunk in enumerate(chunks):
             start, end = chunk["timestamp"]
+            # Whisper đôi khi không predict end timestamp cho chunk cuối
+            if end is None:
+                end = chunks[i - 1]["timestamp"][1] if i > 0 else audio_duration
+                end = end or audio_duration
             segments.append({
                 "start": float(start) if start is not None else 0.0,
                 "end": float(end) if end is not None else 0.0,
