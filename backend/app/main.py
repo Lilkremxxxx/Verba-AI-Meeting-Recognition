@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 load_dotenv()
 # Base directory
 BASE_DIR = Path(__file__).resolve().parent.parent
-
+# .venv\Scripts\activate
 
 app = FastAPI(title="AI Meeting")
 #CROs middleware
