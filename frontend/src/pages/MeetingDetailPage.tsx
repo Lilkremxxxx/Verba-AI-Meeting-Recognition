@@ -24,7 +24,8 @@ import {
   Download,
   FileText,
   Save,
-  Trash2
+  Trash2,
+  Mic
 } from "lucide-react";
 
 import { AppLayout } from "@/components/layout/AppLayout";
@@ -60,7 +61,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-import { getMeetingById, getTranscriptByMeetingId, updateTranscript, summarizeMeeting, deleteMeeting } from "@/services/meetingService";
+import { getMeetingById, getTranscriptByMeetingId, updateTranscript, summarizeMeeting, deleteMeeting, startTranscription } from "@/services/meetingService";
 import type { Meeting, TranscriptSegment, MeetingStatus, SummarizeResponse } from "@/types/meeting";
 import { formatTimeAgo } from "@/utils/time";
 import { exportMeetingToDocx } from "@/utils/exportDocx";
@@ -93,6 +94,10 @@ export default function MeetingDetailPage() {
   // Map of segment index to edited text
   const [editedSegments, setEditedSegments] = useState<Map<number, string>>(new Map());
   const [savingTranscript, setSavingTranscript] = useState(false);
+
+  // Transcription state
+  const [transcribing, setTranscribing] = useState(false);
+  const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   
   // Audio state
   const [isPlaying, setIsPlaying] = useState(false);
@@ -222,6 +227,85 @@ export default function MeetingDetailPage() {
     audioRef.current.currentTime = segment.start;
     audioRef.current.play();
     setIsPlaying(true);
+  }, []);
+
+  const handleStartTranscription = useCallback(async () => {
+    if (!id) return;
+
+    setTranscribing(true);
+    try {
+      const result = await startTranscription(id);
+      if (!result.success) {
+        throw new Error(result.error || "Không thể bắt đầu transcript");
+      }
+
+      toast({ title: "Đang xử lý transcript", description: "Hệ thống đang chuyển đổi âm thanh thành văn bản..." });
+
+      // Update meeting status to PROCESSING immediately in UI
+      setMeeting((prev) => prev ? { ...prev, status: "PROCESSING" } : prev);
+
+      // Poll every 10s until status = DONE then fetch transcript
+      pollingIntervalRef.current = setInterval(async () => {
+        try {
+          const meetingResult = await getMeetingById(id);
+          if (!meetingResult.success || !meetingResult.data) {
+            // Stop polling on auth error (401)
+            if (meetingResult.error?.includes("401") || meetingResult.error?.toLowerCase().includes("unauthorized")) {
+              clearInterval(pollingIntervalRef.current!);
+              pollingIntervalRef.current = null;
+              setTranscribing(false);
+              toast({
+                title: "Phiên đăng nhập hết hạn",
+                description: "Vui lòng đăng nhập lại để tiếp tục.",
+                variant: "destructive",
+              });
+              navigate("/login");
+            }
+            return;
+          }
+
+          const updatedMeeting = meetingResult.data;
+          setMeeting(updatedMeeting);
+
+          if (updatedMeeting.status === "DONE") {
+            clearInterval(pollingIntervalRef.current!);
+            pollingIntervalRef.current = null;
+            setTranscribing(false);
+
+            // Fetch transcript
+            const transcriptResult = await getTranscriptByMeetingId(id);
+            if (transcriptResult.success && transcriptResult.data) {
+              setSegments(transcriptResult.data.segments || []);
+              setTranscriptError(false);
+            }
+            toast({ title: "Transcript hoàn tất", description: "Bản ghi âm đã sẵn sàng." });
+          } else if (updatedMeeting.status === "FAILED") {
+            clearInterval(pollingIntervalRef.current!);
+            pollingIntervalRef.current = null;
+            setTranscribing(false);
+            toast({ title: "Transcript thất bại", description: "Quá trình xử lý gặp lỗi.", variant: "destructive" });
+          }
+        } catch {
+          // ignore polling errors
+        }
+      }, 10000);
+    } catch (err) {
+      setTranscribing(false);
+      toast({
+        title: "Lỗi",
+        description: err instanceof Error ? err.message : "Không thể bắt đầu transcript",
+        variant: "destructive",
+      });
+    }
+  }, [id, toast]);
+
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+      }
+    };
   }, []);
 
   const handleSeek = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
@@ -758,6 +842,24 @@ export default function MeetingDetailPage() {
                 Bản ghi âm chi tiết
               </CardTitle>
               
+              {/* Start Transcription button - show when no transcript */}
+              {!hasTranscript && !transcribing && (
+                <Button
+                  onClick={handleStartTranscription}
+                  className="gap-2"
+                  size="sm"
+                >
+                  <Mic className="h-4 w-4" />
+                  Bắt đầu Transcript
+                </Button>
+              )}
+              {transcribing && (
+                <Button disabled size="sm" className="gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Đang xử lý...
+                </Button>
+              )}
+
               {/* Save button - only show when there are unsaved edits */}
               {editedSegments.size > 0 && (
                 <Button
@@ -799,10 +901,19 @@ export default function MeetingDetailPage() {
                 <div className="w-16 h-16 rounded-full bg-accent flex items-center justify-center mx-auto mb-4">
                   <Clock className="w-8 h-8 text-accent-foreground" />
                 </div>
-                <p className="font-medium">Chưa có transcript (đang xử lý)</p>
-                <p className="text-sm mt-1">
-                  Bản ghi âm vẫn có thể nghe được. Transcript sẽ sẵn sàng sau khi xử lý xong.
-                </p>
+                {transcribing ? (
+                  <>
+                    <p className="font-medium">Đang xử lý transcript...</p>
+                    <p className="text-sm mt-1">Hệ thống đang chuyển đổi âm thanh thành văn bản, vui lòng chờ.</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="font-medium">Chưa có transcript</p>
+                    <p className="text-sm mt-1">
+                      Nhấn nút <span className="font-semibold">Bắt đầu Transcript</span> ở góc trên để xử lý bản ghi âm.
+                    </p>
+                  </>
+                )}
               </div>
             ) : (
               <ScrollArea className="h-[600px] pr-4">
