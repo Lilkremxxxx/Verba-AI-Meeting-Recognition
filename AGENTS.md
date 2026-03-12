@@ -271,3 +271,9 @@ axios.get('/meetings');
 - **Scope:** Backend summarize endpoint
 - **Thay đổi:** Thêm cooldown cho Gemini API key bị `429/RESOURCE_EXHAUSTED`, ưu tiên key thành công gần nhất cho các lượt gọi tiếp theo và giảm log spam khi fallback nhiều key.
 - **Lưu ý:** Cần restart backend để cơ chế cooldown và key preference có hiệu lực. Có thể chỉnh bằng `GEMINI_KEY_COOLDOWN_SECONDS` trong `.env` nếu cần.
+
+### 2026-03-12 — Hiển thị structured summary ở MeetingDetailPage
+- **Scope:** Frontend meeting detail / summary UX
+- **Thay đổi:** Cập nhật rontend/src/pages/MeetingDetailPage.tsx để gọi GET /meetings/{meeting_id}/summary, hiển thị summary, decisions, 	asks, deadlines theo layout mới, thêm trạng thái loading có animation và cho phép chỉnh sửa summary trực tiếp trên UI; đồng thời cập nhật type/service/export tương ứng ở frontend.
+- **Lưu ý:** Chỉnh sửa summary hiện được lưu cục bộ trên giao diện và dùng được khi export DOCX, chưa có endpoint persist thay đổi summary về backend.
+

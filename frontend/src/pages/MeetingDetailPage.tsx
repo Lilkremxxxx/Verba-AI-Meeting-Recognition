@@ -1,4 +1,4 @@
-/**
+﻿/**
  * MeetingDetailPage - Audio playback with transcript highlighting + Summary + Export
  * Features:
  * - Playback speed control (0.75x, 1x, 1.25x, 1.5x, 2x)
@@ -25,7 +25,13 @@ import {
   FileText,
   Save,
   Trash2,
-  Mic
+  Mic,
+  CalendarRange,
+  CheckCircle2,
+  ClipboardList,
+  PencilLine,
+  Plus,
+  X
 } from "lucide-react";
 
 import { AppLayout } from "@/components/layout/AppLayout";
@@ -39,6 +45,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Accordion,
   AccordionContent,
@@ -61,8 +69,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-import { getMeetingById, getTranscriptByMeetingId, updateTranscript, summarizeMeeting, deleteMeeting, startTranscription } from "@/services/meetingService";
-import type { Meeting, TranscriptSegment, MeetingStatus, SummarizeResponse } from "@/types/meeting";
+import { getMeetingById, getMeetingSummaryById, getTranscriptByMeetingId, updateTranscript, deleteMeeting, startTranscription } from "@/services/meetingService";
+import type { Meeting, TranscriptSegment, MeetingStatus, MeetingSummary } from "@/types/meeting";
 import { formatTimeAgo } from "@/utils/time";
 import { exportMeetingToDocx } from "@/utils/exportDocx";
 import { EditableTranscriptSegment } from "@/components/meeting/EditableTranscriptSegment";
@@ -74,6 +82,63 @@ function formatTimestamp(seconds: number): string {
   return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
 }
 
+const SUMMARY_LOADING_MESSAGES = [
+  "Đang lấy bản tóm tắt từ hệ thống...",
+  "Đang gom các quyết định quan trọng...",
+  "Đang sắp xếp đầu việc và mốc thời gian...",
+];
+
+function createEmptySummary(): MeetingSummary {
+  return {
+    summary: "",
+    decisions: [],
+    tasks: [],
+    deadlines: [],
+  };
+}
+
+function cloneSummary(summary: MeetingSummary): MeetingSummary {
+  return {
+    summary: summary.summary,
+    decisions: [...summary.decisions],
+    tasks: summary.tasks.map((task) => ({ ...task })),
+    deadlines: summary.deadlines.map((deadline) => ({ ...deadline })),
+  };
+}
+
+function normalizeMeetingSummary(summary: Partial<MeetingSummary> | null | undefined): MeetingSummary {
+  return {
+    summary: typeof summary?.summary === "string" ? summary.summary : "",
+    decisions: Array.isArray(summary?.decisions)
+      ? summary.decisions.filter((item): item is string => typeof item === "string")
+      : [],
+    tasks: Array.isArray(summary?.tasks)
+      ? summary.tasks.map((task) => ({
+          task: typeof task?.task === "string" ? task.task : "",
+          owner: typeof task?.owner === "string" ? task.owner : "",
+          deadline: typeof task?.deadline === "string" ? task.deadline : "",
+        }))
+      : [],
+    deadlines: Array.isArray(summary?.deadlines)
+      ? summary.deadlines.map((deadline) => ({
+          date: typeof deadline?.date === "string" ? deadline.date : "",
+          item: typeof deadline?.item === "string" ? deadline.item : "",
+        }))
+      : [],
+  };
+}
+
+function hasSummaryContent(summary: MeetingSummary | null): boolean {
+  if (!summary) return false;
+
+  return Boolean(
+    summary.summary.trim() ||
+      summary.decisions.some((item) => item.trim()) ||
+      summary.tasks.some((item) => item.task.trim() || item.owner.trim() || item.deadline.trim()) ||
+      summary.deadlines.some((item) => item.date.trim() || item.item.trim())
+  );
+}
+
 export default function MeetingDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -82,7 +147,10 @@ export default function MeetingDetailPage() {
   // State
   const [meeting, setMeeting] = useState<Meeting | null>(null);
   const [segments, setSegments] = useState<TranscriptSegment[]>([]);
-  const [summary, setSummary] = useState<string | null>(null); // Now stores plain text summary
+  const [summary, setSummary] = useState<MeetingSummary | null>(null);
+  const [summaryDraft, setSummaryDraft] = useState<MeetingSummary | null>(null);
+  const [editingSummary, setEditingSummary] = useState(false);
+  const [summaryLoadingMessageIndex, setSummaryLoadingMessageIndex] = useState(0);
   const [loadingMeeting, setLoadingMeeting] = useState(true);
   const [loadingTranscript, setLoadingTranscript] = useState(true);
   const [loadingSummary, setLoadingSummary] = useState(false);
@@ -120,6 +188,19 @@ export default function MeetingDetailPage() {
   const audioRef = useRef<HTMLAudioElement>(null);
   const activeSegmentRef = useRef<HTMLDivElement>(null);
   const lastScrollTime = useRef<number>(0);
+
+  useEffect(() => {
+    if (!loadingSummary) {
+      setSummaryLoadingMessageIndex(0);
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      setSummaryLoadingMessageIndex((prev) => (prev + 1) % SUMMARY_LOADING_MESSAGES.length);
+    }, 1400);
+
+    return () => window.clearInterval(intervalId);
+  }, [loadingSummary]);
 
   useEffect(() => {
     const fetchMeetingData = async () => {
@@ -297,7 +378,7 @@ export default function MeetingDetailPage() {
         variant: "destructive",
       });
     }
-  }, [id, toast]);
+  }, [id, navigate, toast]);
 
   // Cleanup polling on unmount
   useEffect(() => {
@@ -344,7 +425,7 @@ export default function MeetingDetailPage() {
       await exportMeetingToDocx({
         meeting,
         segments: exportIncludeTranscript ? segments : undefined,
-        summary: exportIncludeSummary && summary ? { executiveSummary: summary, keyHighlights: [], actionItems: [] } : undefined,
+        summary: exportIncludeSummary ? summary ?? undefined : undefined,
         includeSummary: exportIncludeSummary,
         includeTranscript: exportIncludeTranscript,
       });
@@ -399,33 +480,158 @@ export default function MeetingDetailPage() {
 
     setLoadingSummary(true);
     setSummaryError(null);
-    
+
     try {
-      // Use CURRENT transcript state (includes unsaved edits)
-      const result = await summarizeMeeting(id, segments);
+      const result = await getMeetingSummaryById(id);
 
       if (result.success && result.data) {
-        setSummary(result.data.summary);
+        const normalizedSummary = normalizeMeetingSummary(result.data);
+        setSummary(normalizedSummary);
+        setSummaryDraft(cloneSummary(normalizedSummary));
+        setEditingSummary(false);
         toast({
-          title: "Tóm tắt thành công",
-          description: "Đã tạo tóm tắt cuộc họp.",
+          title: "Tải tóm tắt thành công",
+          description: "Đã lấy dữ liệu từ endpoint GET /meetings/{meeting_id}/summary.",
         });
       } else {
-        throw new Error(result.error || "Không thể tạo tóm tắt");
+        throw new Error(result.error || "Không thể lấy tóm tắt cuộc họp");
       }
     } catch (err) {
-      console.error("Error generating summary:", err);
-      const errorMessage = err instanceof Error ? err.message : "Không thể tạo tóm tắt. Vui lòng thử lại.";
+      console.error("Error fetching summary:", err);
+      const errorMessage = err instanceof Error ? err.message : "Không thể lấy tóm tắt. Vui lòng thử lại.";
       setSummaryError(errorMessage);
       toast({
-        title: "Lỗi khi tóm tắt",
+        title: "Lỗi khi lấy tóm tắt",
         description: errorMessage,
         variant: "destructive",
       });
     } finally {
       setLoadingSummary(false);
     }
-  }, [id, segments, toast]);
+  }, [id, segments.length, toast]);
+
+  const handleStartSummaryEdit = useCallback(() => {
+    if (!summary) return;
+    setSummaryDraft(cloneSummary(summary));
+    setEditingSummary(true);
+  }, [summary]);
+
+  const handleCancelSummaryEdit = useCallback(() => {
+    setSummaryDraft(summary ? cloneSummary(summary) : null);
+    setEditingSummary(false);
+  }, [summary]);
+
+  const handleSaveSummaryEdit = useCallback(() => {
+    if (!summaryDraft) return;
+
+    const normalizedDraft = normalizeMeetingSummary(summaryDraft);
+    setSummary(normalizedDraft);
+    setSummaryDraft(cloneSummary(normalizedDraft));
+    setEditingSummary(false);
+    toast({
+      title: "Đã cập nhật tóm tắt",
+      description: "Nội dung tóm tắt đã được chỉnh sửa trên giao diện.",
+    });
+  }, [summaryDraft, toast]);
+
+  const handleSummaryTextChange = useCallback((value: string) => {
+    setSummaryDraft((prev) => prev ? { ...prev, summary: value } : prev);
+  }, []);
+
+  const handleDecisionChange = useCallback((index: number, value: string) => {
+    setSummaryDraft((prev) => {
+      if (!prev) return prev;
+      const decisions = [...prev.decisions];
+      decisions[index] = value;
+      return { ...prev, decisions };
+    });
+  }, []);
+
+  const handleAddDecision = useCallback(() => {
+    setSummaryDraft((prev) => prev ? { ...prev, decisions: [...prev.decisions, ""] } : { ...createEmptySummary(), decisions: [""] });
+  }, []);
+
+  const handleRemoveDecision = useCallback((index: number) => {
+    setSummaryDraft((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        decisions: prev.decisions.filter((_, itemIndex) => itemIndex !== index),
+      };
+    });
+  }, []);
+
+  const handleTaskChange = useCallback((index: number, field: "task" | "owner" | "deadline", value: string) => {
+    setSummaryDraft((prev) => {
+      if (!prev) return prev;
+      const tasks = prev.tasks.map((task, taskIndex) =>
+        taskIndex === index ? { ...task, [field]: value } : task
+      );
+      return { ...prev, tasks };
+    });
+  }, []);
+
+  const handleAddTask = useCallback(() => {
+    setSummaryDraft((prev) => {
+      if (!prev) {
+        return {
+          ...createEmptySummary(),
+          tasks: [{ task: "", owner: "", deadline: "" }],
+        };
+      }
+
+      return {
+        ...prev,
+        tasks: [...prev.tasks, { task: "", owner: "", deadline: "" }],
+      };
+    });
+  }, []);
+
+  const handleRemoveTask = useCallback((index: number) => {
+    setSummaryDraft((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        tasks: prev.tasks.filter((_, taskIndex) => taskIndex !== index),
+      };
+    });
+  }, []);
+
+  const handleDeadlineChange = useCallback((index: number, field: "date" | "item", value: string) => {
+    setSummaryDraft((prev) => {
+      if (!prev) return prev;
+      const deadlines = prev.deadlines.map((deadline, deadlineIndex) =>
+        deadlineIndex === index ? { ...deadline, [field]: value } : deadline
+      );
+      return { ...prev, deadlines };
+    });
+  }, []);
+
+  const handleAddDeadline = useCallback(() => {
+    setSummaryDraft((prev) => {
+      if (!prev) {
+        return {
+          ...createEmptySummary(),
+          deadlines: [{ date: "", item: "" }],
+        };
+      }
+
+      return {
+        ...prev,
+        deadlines: [...prev.deadlines, { date: "", item: "" }],
+      };
+    });
+  }, []);
+
+  const handleRemoveDeadline = useCallback((index: number) => {
+    setSummaryDraft((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        deadlines: prev.deadlines.filter((_, deadlineIndex) => deadlineIndex !== index),
+      };
+    });
+  }, []);
 
   const handleTextEdit = useCallback((index: number, newText: string) => {
     // Update the edited segments map
@@ -568,7 +774,7 @@ export default function MeetingDetailPage() {
   const audioUrl = meeting.audioUrl;
   const hasAudio = !!audioUrl;
   const hasTranscript = segments.length > 0;
-  const hasSummary = !!summary;
+  const hasSummary = hasSummaryContent(summary);
 
   // Success state
   return (
@@ -750,51 +956,69 @@ export default function MeetingDetailPage() {
         </Card>
 
         {/* Summary Section - Collapsible, User-Triggered */}
-        <Card>
-          <Accordion type="single" collapsible defaultValue="">
+        <Card className="overflow-hidden border-primary/10">
+          <Accordion type="single" collapsible defaultValue="summary">
             <AccordionItem value="summary" className="border-none">
-              <CardHeader className="pb-3">
+              <CardHeader className="border-b bg-gradient-to-r from-primary/5 via-background to-primary/10 pb-4">
                 <AccordionTrigger className="hover:no-underline py-0">
-                  <CardTitle className="flex items-center gap-2">
-                    <Sparkles className="h-5 w-5" />
-                    Tóm tắt cuộc họp
-                  </CardTitle>
+                  <div className="flex w-full items-center justify-between gap-4 pr-4 text-left">
+                    <div>
+                      <CardTitle className="flex items-center gap-2">
+                        <Sparkles className="h-5 w-5 text-primary" />
+                        Tóm tắt cuộc họp
+                      </CardTitle>
+                      <p className="mt-2 text-sm text-muted-foreground">
+                        Nhấn nút bên dưới để gọi endpoint <span className="font-mono text-xs">{"GET /meetings/{meeting_id}/summary"}</span>. Nhấp đúp vào nội dung sau khi tải để chỉnh sửa nhanh.
+                      </p>
+                    </div>
+                    {hasSummary && (
+                      <div className="hidden flex-wrap items-center gap-2 lg:flex">
+                        <Badge variant="secondary">{summary?.decisions.length || 0} quyết định</Badge>
+                        <Badge variant="secondary">{summary?.tasks.length || 0} đầu việc</Badge>
+                        <Badge variant="secondary">{summary?.deadlines.length || 0} mốc</Badge>
+                      </div>
+                    )}
+                  </div>
                 </AccordionTrigger>
               </CardHeader>
               <AccordionContent>
-                <CardContent className="pt-0 space-y-4">
+                <CardContent className="space-y-5 pt-5">
                   {!hasSummary && !loadingSummary ? (
-                    // Initial state - show summarize button
-                    <div className="py-8 text-center">
-                      <div className="w-16 h-16 rounded-full bg-accent flex items-center justify-center mx-auto mb-4">
-                        <Sparkles className="w-8 h-8 text-accent-foreground" />
+                    <div className="rounded-2xl border border-dashed border-primary/20 bg-gradient-to-br from-primary/5 to-background px-6 py-10 text-center">
+                      <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 text-primary shadow-sm">
+                        <Sparkles className="h-8 w-8" />
                       </div>
-                      <p className="text-sm text-muted-foreground mb-4">
-                        Nhấn nút bên dưới để tạo tóm tắt từ transcript hiện tại
+                      <h3 className="text-lg font-semibold">Lấy tóm tắt cấu trúc cho cuộc họp</h3>
+                      <p className="mx-auto mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+                        Hệ thống sẽ hiển thị tổng quan, quyết định quan trọng, đầu việc cần làm và các mốc thời gian để bạn rà soát nhanh trước khi export.
                       </p>
                       <Button
                         onClick={handleSummarize}
                         disabled={!hasTranscript || loadingSummary}
-                        className="gap-2"
+                        className="mt-5 gap-2"
                       >
                         <Sparkles className="h-4 w-4" />
-                        Tóm tắt cuộc họp
+                        Tải tóm tắt cuộc họp
                       </Button>
                       {!hasTranscript && (
-                        <p className="text-xs text-muted-foreground mt-2">
-                          Cần có transcript để tóm tắt
+                        <p className="mt-3 text-xs text-muted-foreground">
+                          Cần có transcript trước khi lấy summary.
                         </p>
                       )}
                     </div>
                   ) : loadingSummary ? (
-                    // Loading state
-                    <div className="flex items-center gap-2 text-muted-foreground py-8 justify-center">
-                      <Loader2 className="h-5 w-5 animate-spin" />
-                      <span>Đang tóm tắt cuộc hội thoại …</span>
+                    <div className="flex flex-col items-center justify-center gap-4 rounded-2xl border border-primary/10 bg-gradient-to-br from-primary/5 via-background to-background px-6 py-12 text-center">
+                      <div className="relative flex h-16 w-16 items-center justify-center rounded-full border border-primary/20 bg-background shadow-sm">
+                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                        <div className="absolute inset-0 animate-spin rounded-full border-2 border-primary/10 border-t-primary/40 [animation-duration:2.4s]" />
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-base font-medium">Đang xử lý tóm tắt cuộc họp</p>
+                        <p className="text-sm text-muted-foreground">{SUMMARY_LOADING_MESSAGES[summaryLoadingMessageIndex]}</p>
+                      </div>
                     </div>
                   ) : summaryError ? (
-                    // Error state
-                    <div className="py-8 text-center">
+                    <div className="py-4 text-center">
                       <Alert variant="destructive" className="mb-4">
                         <AlertCircle className="h-4 w-4" />
                         <AlertDescription>{summaryError}</AlertDescription>
@@ -808,24 +1032,287 @@ export default function MeetingDetailPage() {
                       </Button>
                     </div>
                   ) : (
-                    // Success state - show summary with regenerate option
-                    <>
-                      <p className="text-sm text-foreground/80 leading-relaxed whitespace-pre-wrap">
-                        {summary}
-                      </p>
-                      <div className="flex justify-end pt-2">
-                        <Button
-                          onClick={handleSummarize}
-                          variant="outline"
-                          size="sm"
-                          className="gap-2"
-                          disabled={loadingSummary}
-                        >
-                          <Sparkles className="h-4 w-4" />
-                          Tạo lại tóm tắt
-                        </Button>
+                    <div className="space-y-5">
+                      <div className="flex flex-col gap-3 rounded-2xl border border-primary/10 bg-gradient-to-r from-primary/5 via-background to-background p-4 md:flex-row md:items-center md:justify-between">
+                        <div>
+                          <p className="text-sm font-medium">Dữ liệu tóm tắt đã sẵn sàng</p>
+                          <p className="text-sm text-muted-foreground">
+                            Bạn có thể chỉnh sửa trực tiếp trên giao diện trước khi xuất DOCX.
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {editingSummary ? (
+                            <>
+                              <Button onClick={handleSaveSummaryEdit} size="sm" className="gap-2">
+                                <Save className="h-4 w-4" />
+                                Lưu chỉnh sửa
+                              </Button>
+                              <Button onClick={handleCancelSummaryEdit} size="sm" variant="outline" className="gap-2">
+                                <X className="h-4 w-4" />
+                                Hủy
+                              </Button>
+                            </>
+                          ) : (
+                            <>
+                              <Button onClick={handleStartSummaryEdit} size="sm" variant="outline" className="gap-2">
+                                <PencilLine className="h-4 w-4" />
+                                Chỉnh sửa
+                              </Button>
+                              <Button onClick={handleSummarize} size="sm" variant="outline" className="gap-2" disabled={loadingSummary}>
+                                <Sparkles className="h-4 w-4" />
+                                Tải lại từ API
+                              </Button>
+                            </>
+                          )}
+                        </div>
                       </div>
-                    </>
+
+                      {editingSummary && summaryDraft ? (
+                        <div className="space-y-5">
+                          <div className="rounded-2xl border bg-card p-4 shadow-sm">
+                            <div className="mb-3 flex items-center gap-2">
+                              <Sparkles className="h-4 w-4 text-primary" />
+                              <h3 className="font-semibold">Tổng quan cuộc họp</h3>
+                            </div>
+                            <Textarea
+                              value={summaryDraft.summary}
+                              onChange={(event) => handleSummaryTextChange(event.target.value)}
+                              className="min-h-[140px] resize-y"
+                              placeholder="Nhập phần tóm tắt ngắn gọn của cuộc họp..."
+                            />
+                          </div>
+
+                          <div className="grid gap-5 xl:grid-cols-3">
+                            <div className="rounded-2xl border bg-card p-4 shadow-sm">
+                              <div className="mb-3 flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2">
+                                  <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                                  <h3 className="font-semibold">Quyết định quan trọng</h3>
+                                </div>
+                                <Button type="button" size="sm" variant="outline" onClick={handleAddDecision} className="gap-1">
+                                  <Plus className="h-3.5 w-3.5" />
+                                  Thêm
+                                </Button>
+                              </div>
+                              <div className="space-y-3">
+                                {summaryDraft.decisions.length === 0 && (
+                                  <p className="text-sm text-muted-foreground">Chưa có quyết định nào. Bạn có thể thêm mới bên trên.</p>
+                                )}
+                                {summaryDraft.decisions.map((decision, index) => (
+                                  <div key={`decision-${index}`} className="space-y-2 rounded-xl border border-border/70 p-3">
+                                    <Textarea
+                                      value={decision}
+                                      onChange={(event) => handleDecisionChange(index, event.target.value)}
+                                      className="min-h-[96px] resize-y"
+                                      placeholder={`Quyết định ${index + 1}`}
+                                    />
+                                    <div className="flex justify-end">
+                                      <Button type="button" size="sm" variant="ghost" onClick={() => handleRemoveDecision(index)} className="text-muted-foreground hover:text-destructive">
+                                        Xóa
+                                      </Button>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+
+                            <div className="rounded-2xl border bg-card p-4 shadow-sm xl:col-span-2">
+                              <div className="mb-3 flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2">
+                                  <ClipboardList className="h-4 w-4 text-amber-600" />
+                                  <h3 className="font-semibold">Đầu việc cần làm</h3>
+                                </div>
+                                <Button type="button" size="sm" variant="outline" onClick={handleAddTask} className="gap-1">
+                                  <Plus className="h-3.5 w-3.5" />
+                                  Thêm đầu việc
+                                </Button>
+                              </div>
+                              <div className="space-y-3">
+                                {summaryDraft.tasks.length === 0 && (
+                                  <p className="text-sm text-muted-foreground">Chưa có đầu việc nào.</p>
+                                )}
+                                {summaryDraft.tasks.map((task, index) => (
+                                  <div key={`task-${index}`} className="rounded-xl border border-border/70 p-3">
+                                    <div className="grid gap-3 md:grid-cols-2">
+                                      <div className="md:col-span-2">
+                                        <Label className="mb-2 block text-xs uppercase tracking-wide text-muted-foreground">Nội dung</Label>
+                                        <Textarea
+                                          value={task.task}
+                                          onChange={(event) => handleTaskChange(index, "task", event.target.value)}
+                                          className="min-h-[92px] resize-y"
+                                          placeholder="Ví dụ: Chuẩn bị tài liệu họp sprint tiếp theo"
+                                        />
+                                      </div>
+                                      <div>
+                                        <Label className="mb-2 block text-xs uppercase tracking-wide text-muted-foreground">Người phụ trách</Label>
+                                        <Input
+                                          value={task.owner}
+                                          onChange={(event) => handleTaskChange(index, "owner", event.target.value)}
+                                          placeholder="Ví dụ: Minh / Team Backend"
+                                        />
+                                      </div>
+                                      <div>
+                                        <Label className="mb-2 block text-xs uppercase tracking-wide text-muted-foreground">Hạn chót</Label>
+                                        <Input
+                                          value={task.deadline}
+                                          onChange={(event) => handleTaskChange(index, "deadline", event.target.value)}
+                                          placeholder="2026-03-20 hoặc Cuối tuần này"
+                                        />
+                                      </div>
+                                    </div>
+                                    <div className="mt-2 flex justify-end">
+                                      <Button type="button" size="sm" variant="ghost" onClick={() => handleRemoveTask(index)} className="text-muted-foreground hover:text-destructive">
+                                        Xóa đầu việc
+                                      </Button>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="rounded-2xl border bg-card p-4 shadow-sm">
+                            <div className="mb-3 flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-2">
+                                <CalendarRange className="h-4 w-4 text-sky-600" />
+                                <h3 className="font-semibold">Mốc thời gian</h3>
+                              </div>
+                              <Button type="button" size="sm" variant="outline" onClick={handleAddDeadline} className="gap-1">
+                                <Plus className="h-3.5 w-3.5" />
+                                Thêm mốc
+                              </Button>
+                            </div>
+                            <div className="space-y-3">
+                              {summaryDraft.deadlines.length === 0 && (
+                                <p className="text-sm text-muted-foreground">Chưa có mốc thời gian nào.</p>
+                              )}
+                              {summaryDraft.deadlines.map((deadline, index) => (
+                                <div key={`deadline-${index}`} className="rounded-xl border border-border/70 p-3">
+                                  <div className="grid gap-3 md:grid-cols-[220px_1fr]">
+                                    <div>
+                                      <Label className="mb-2 block text-xs uppercase tracking-wide text-muted-foreground">Ngày / mốc</Label>
+                                      <Input
+                                        value={deadline.date}
+                                        onChange={(event) => handleDeadlineChange(index, "date", event.target.value)}
+                                        placeholder="2026-03-15 hoặc Thứ Sáu tuần này"
+                                      />
+                                    </div>
+                                    <div>
+                                      <Label className="mb-2 block text-xs uppercase tracking-wide text-muted-foreground">Sự kiện</Label>
+                                      <Input
+                                        value={deadline.item}
+                                        onChange={(event) => handleDeadlineChange(index, "item", event.target.value)}
+                                        placeholder="Ví dụ: Chốt bản demo"
+                                      />
+                                    </div>
+                                  </div>
+                                  <div className="mt-2 flex justify-end">
+                                    <Button type="button" size="sm" variant="ghost" onClick={() => handleRemoveDeadline(index)} className="text-muted-foreground hover:text-destructive">
+                                      Xóa mốc
+                                    </Button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      ) : summary ? (
+                        <div className="space-y-5" onDoubleClick={handleStartSummaryEdit}>
+                          <div className="grid gap-5 xl:grid-cols-3">
+                            <div className="rounded-3xl border border-primary/10 bg-gradient-to-br from-primary/10 via-background to-background p-5 shadow-sm xl:col-span-2">
+                              <div className="mb-3 flex items-center gap-2">
+                                <Sparkles className="h-4 w-4 text-primary" />
+                                <h3 className="font-semibold">Bức tranh tổng quan</h3>
+                              </div>
+                              <p className="whitespace-pre-wrap text-sm leading-7 text-foreground/85">
+                                {summary.summary || "Chưa có phần mô tả tổng quan."}
+                              </p>
+                            </div>
+
+                            <div className="grid gap-3">
+                              <div className="rounded-2xl border bg-card p-4 shadow-sm">
+                                <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Quyết định</p>
+                                <p className="mt-2 text-3xl font-bold">{summary.decisions.length}</p>
+                              </div>
+                              <div className="rounded-2xl border bg-card p-4 shadow-sm">
+                                <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Đầu việc</p>
+                                <p className="mt-2 text-3xl font-bold">{summary.tasks.length}</p>
+                              </div>
+                              <div className="rounded-2xl border bg-card p-4 shadow-sm">
+                                <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">Mốc thời gian</p>
+                                <p className="mt-2 text-3xl font-bold">{summary.deadlines.length}</p>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="grid gap-5 xl:grid-cols-3">
+                            <div className="rounded-2xl border bg-card p-5 shadow-sm">
+                              <div className="mb-4 flex items-center gap-2">
+                                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                                <h3 className="font-semibold">Quyết định quan trọng</h3>
+                              </div>
+                              {summary.decisions.length > 0 ? (
+                                <div className="space-y-3">
+                                  {summary.decisions.map((decision, index) => (
+                                    <div key={`decision-read-${index}`} className="rounded-xl border border-emerald-100 bg-emerald-50/60 p-3 text-sm leading-6 text-foreground/90">
+                                      <span className="mr-2 inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-600 text-xs font-semibold text-white">
+                                        {index + 1}
+                                      </span>
+                                      {decision}
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <p className="text-sm text-muted-foreground">Chưa có quyết định nào được ghi nhận.</p>
+                              )}
+                            </div>
+
+                            <div className="rounded-2xl border bg-card p-5 shadow-sm xl:col-span-2">
+                              <div className="mb-4 flex items-center gap-2">
+                                <ClipboardList className="h-4 w-4 text-amber-600" />
+                                <h3 className="font-semibold">Đầu việc cần làm</h3>
+                              </div>
+                              {summary.tasks.length > 0 ? (
+                                <div className="grid gap-3 md:grid-cols-2">
+                                  {summary.tasks.map((task, index) => (
+                                    <div key={`task-read-${index}`} className="rounded-2xl border border-amber-100 bg-amber-50/60 p-4">
+                                      <p className="text-sm font-medium leading-6 text-foreground">{task.task || "Chưa có mô tả công việc"}</p>
+                                      <div className="mt-3 space-y-1 text-xs text-muted-foreground">
+                                        <p><span className="font-medium text-foreground/80">Phụ trách:</span> {task.owner || "Chưa rõ"}</p>
+                                        <p><span className="font-medium text-foreground/80">Hạn chót:</span> {task.deadline || "Chưa rõ"}</p>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <p className="text-sm text-muted-foreground">Chưa có đầu việc nào được trích xuất.</p>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="rounded-2xl border bg-card p-5 shadow-sm">
+                            <div className="mb-4 flex items-center gap-2">
+                              <CalendarRange className="h-4 w-4 text-sky-600" />
+                              <h3 className="font-semibold">Mốc thời gian quan trọng</h3>
+                            </div>
+                            {summary.deadlines.length > 0 ? (
+                              <div className="space-y-3">
+                                {summary.deadlines.map((deadline, index) => (
+                                  <div key={`deadline-read-${index}`} className="grid gap-3 rounded-2xl border border-sky-100 bg-sky-50/60 p-4 md:grid-cols-[220px_1fr] md:items-center">
+                                    <div className="rounded-xl bg-white/80 px-3 py-2 text-sm font-semibold text-sky-700 shadow-sm">
+                                      {deadline.date || "Chưa rõ thời gian"}
+                                    </div>
+                                    <p className="text-sm leading-6 text-foreground/90">{deadline.item || "Chưa có mô tả"}</p>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="text-sm text-muted-foreground">Chưa có mốc thời gian nào trong phần summary.</p>
+                            )}
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
                   )}
                 </CardContent>
               </AccordionContent>
@@ -1062,3 +1549,6 @@ export default function MeetingDetailPage() {
     </AppLayout>
   );
 }
+
+
+

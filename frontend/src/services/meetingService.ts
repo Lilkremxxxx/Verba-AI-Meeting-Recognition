@@ -206,7 +206,7 @@ export async function getTranscriptByMeetingId(id: string): Promise<{
  */
 export async function updateTranscript(
   id: string,
-  editedSegments: TranscriptSegment[]
+  editedSegments: Array<{ index: number; text: string }>
 ): Promise<{
   success: boolean;
   data?: TranscriptResponse;
@@ -248,11 +248,10 @@ export async function updateTranscript(
   }
 }
 
-
 /**
- * Fetches summary for a meeting (DEPRECATED - use summarizeMeeting instead)
+ * Fetches summary for a meeting
  * @param id - Meeting ID
- * @returns Promise with summary data or error
+ * @returns Promise with structured summary data or error
  */
 export async function getMeetingSummaryById(id: string): Promise<{
   success: boolean;
@@ -264,13 +263,14 @@ export async function getMeetingSummaryById(id: string): Promise<{
       `${API_BASE_URL}/meetings/${encodeURIComponent(id)}/summary`,
       {
         method: "GET",
+        headers: getAuthHeaders(),
       },
     );
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       throw new Error(
-        errorData.message || `HTTP error! status: ${response.status}`,
+        errorData.detail || errorData.message || `HTTP error! status: ${response.status}`,
       );
     }
 
@@ -320,7 +320,7 @@ export async function summarizeMeeting(
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       throw new Error(
-        errorData.message || `HTTP error! status: ${response.status}`,
+        errorData.detail || errorData.message || `HTTP error! status: ${response.status}`,
       );
     }
 

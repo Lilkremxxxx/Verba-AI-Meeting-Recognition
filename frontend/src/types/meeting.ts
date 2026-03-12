@@ -1,4 +1,4 @@
-export type MeetingStatus = 'QUEUED' | 'PROCESSING' | 'DONE' | 'FAILED';
+﻿export type MeetingStatus = 'QUEUED' | 'PROCESSING' | 'DONE' | 'FAILED';
 
 // Backend API response format (snake_case)
 export interface Meeting {
@@ -19,24 +19,43 @@ export interface TranscriptResponse {
 
 // Transcript segment from API (snake_case)
 export interface TranscriptSegment {
-  start: number;  // seconds
-  end: number;    // seconds
+  start: number; // seconds
+  end: number; // seconds
   speaker: string;
   text: string;
 }
 
-// Summary derived from transcript (frontend-generated - DEPRECATED)
+export interface ActionItem {
+  id: string;
+  text: string;
+  completed: boolean;
+  assignee?: string;
+}
+
+// Legacy frontend-generated summary types kept for compatibility with older components
 export interface AISummary {
   executiveSummary: string;
   keyHighlights: string[];
-  actionItems: string[]; // Simple string array
+  actionItems: ActionItem[];
 }
 
-// Summary API response format (from backend - DEPRECATED, kept for backward compatibility)
+export interface SummaryTask {
+  task: string;
+  owner: string;
+  deadline: string;
+}
+
+export interface SummaryDeadline {
+  date: string;
+  item: string;
+}
+
+// Structured summary payload returned by GET /meetings/{meeting_id}/summary
 export interface MeetingSummary {
-  meeting_id: string;
-  status: MeetingStatus;
   summary: string;
+  decisions: string[];
+  tasks: SummaryTask[];
+  deadlines: SummaryDeadline[];
 }
 
 // Summary request payload (POST /summarize)
@@ -45,8 +64,5 @@ export interface SummarizeRequest {
   segments: TranscriptSegment[];
 }
 
-// Summary response from POST /summarize
-export interface SummarizeResponse {
-  id: string;
-  summary: string;
-}
+// Kept for compatibility with older summarize flow
+export type SummarizeResponse = MeetingSummary;
