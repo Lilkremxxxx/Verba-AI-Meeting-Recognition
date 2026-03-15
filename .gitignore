@@ -48,8 +48,14 @@ backend/uploads/
 backend/.cache/
 backend/third_party/cuda12/
 backend/benchmark_outputs/
+backend/benchmark_outputs_300s/
+backend/scripts/ 
+backend/third_party/ 
+
 
 # Local notebooks / model artifacts if added later
 *.ckpt
 *.bin
 *.safetensors
+
+*.md
