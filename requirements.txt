@@ -1,0 +1,15 @@
+async
+asyncpg
+asyncio
+dotenv
+fastapi
+uvicorn
+dotenv
+pydantic
+python-jose
+passlib
+argon2-cffi
+ransformers 
+pydub
+sounddevice 
+scipy
