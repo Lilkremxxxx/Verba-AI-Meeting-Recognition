@@ -51,7 +51,9 @@ backend/benchmark_outputs/
 backend/benchmark_outputs_300s/
 backend/scripts/ 
 backend/third_party/ 
-
+backend/app/uploads/
+backend/app/.cache/
+backend/app/third_party/
 
 # Local notebooks / model artifacts if added later
 *.ckpt
