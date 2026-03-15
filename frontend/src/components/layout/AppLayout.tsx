@@ -1,4 +1,4 @@
-import { ReactNode } from "react";
+﻿import { ReactNode } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
 import { AudioWaveform, LayoutDashboard, LogOut, User } from "lucide-react";
@@ -12,7 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/contexts/useAuth";
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -106,7 +106,7 @@ export function AppLayout({ children }: AppLayoutProps) {
               <DropdownMenuSeparator />
               <DropdownMenuItem className="cursor-pointer">
                 <User className="mr-2 h-4 w-4" />
-                <span>Hồ sơ</span>
+                <span>Há»“ sÆ¡</span>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
@@ -114,7 +114,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                 className="cursor-pointer text-destructive focus:text-destructive"
               >
                 <LogOut className="mr-2 h-4 w-4" />
-                <span>Đăng xuất</span>
+                <span>ÄÄƒng xuáº¥t</span>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -134,3 +134,4 @@ export function AppLayout({ children }: AppLayoutProps) {
     </div>
   );
 }
+

@@ -4,14 +4,24 @@
  */
 
 import {
+  AlignmentType,
   Document,
+  HeadingLevel,
   Packer,
   Paragraph,
   TextRun,
-  HeadingLevel,
-  AlignmentType,
 } from "docx";
-import type { Meeting, TranscriptSegment, MeetingSummary } from "@/types/meeting";
+import type { Meeting, MeetingSummary, TranscriptSegment } from "@/types/meeting";
+
+const SECTION_SPACING = {
+  titleAfter: 200,
+  sectionBefore: 300,
+  headingAfter: 100,
+  paragraphAfter: 200,
+  itemAfter: 100,
+  transcriptBefore: 150,
+  transcriptHeaderAfter: 50,
+} as const;
 
 /**
  * Format seconds to MM:SS for transcript timestamps
@@ -36,6 +46,169 @@ function formatDate(isoString: string): string {
   });
 }
 
+function createHeading(
+  text: string,
+  heading: HeadingLevel,
+  spacing?: { before?: number; after?: number },
+): Paragraph {
+  return new Paragraph({
+    text,
+    heading,
+    spacing,
+  });
+}
+
+function createLabelValueParagraph(label: string, value: string): Paragraph {
+  return new Paragraph({
+    children: [
+      new TextRun({ text: label, bold: true }),
+      new TextRun(value),
+    ],
+    spacing: { after: SECTION_SPACING.paragraphAfter },
+  });
+}
+
+function createPlainParagraph(text: string, after = SECTION_SPACING.itemAfter): Paragraph {
+  return new Paragraph({
+    text,
+    spacing: { after },
+  });
+}
+
+function pushNumberedSection(
+  children: Paragraph[],
+  title: string,
+  items: string[],
+  mapItem?: (item: string, index: number) => string,
+): void {
+  if (items.length === 0) {
+    return;
+  }
+
+  children.push(
+    createHeading(title, HeadingLevel.HEADING_3, {
+      before: 200,
+      after: SECTION_SPACING.headingAfter,
+    }),
+  );
+
+  items.forEach((item, index) => {
+    const line = mapItem ? mapItem(item, index) : `${index + 1}. ${item}`;
+    children.push(createPlainParagraph(line));
+  });
+}
+
+function buildMetadataSection(meeting: Meeting): Paragraph[] {
+  return [
+    createHeading("Thông tin cuộc họp", HeadingLevel.HEADING_2, {
+      before: 200,
+      after: SECTION_SPACING.headingAfter,
+    }),
+    createLabelValueParagraph("File gốc: ", meeting.original_filename),
+    createLabelValueParagraph("Ngày tạo: ", formatDate(meeting.created_at)),
+  ];
+}
+
+function buildSummarySection(summary: MeetingSummary): Paragraph[] {
+  const children: Paragraph[] = [
+    createHeading("Tóm tắt cuộc họp", HeadingLevel.HEADING_2, {
+      before: SECTION_SPACING.sectionBefore,
+      after: SECTION_SPACING.headingAfter,
+    }),
+  ];
+
+  if (summary.summary) {
+    children.push(
+      createHeading("Tổng quan", HeadingLevel.HEADING_3, {
+        before: 200,
+        after: SECTION_SPACING.headingAfter,
+      }),
+      createPlainParagraph(summary.summary, SECTION_SPACING.paragraphAfter),
+    );
+  }
+
+  pushNumberedSection(children, "Quyết định và điểm quan trọng", summary.decisions);
+
+  pushNumberedSection(
+    children,
+    "Công việc cần thực hiện",
+    summary.tasks.map((item) =>
+      [
+        item.task,
+        `Phụ trách: ${item.owner || "Chưa rõ"}`,
+        `Hạn: ${item.deadline || "Chưa rõ"}`,
+      ].join(" | "),
+    ),
+    (item, index) => `${index + 1}. ${item}`,
+  );
+
+  pushNumberedSection(
+    children,
+    "Mốc thời gian",
+    summary.deadlines.map((deadline) => `${deadline.date}: ${deadline.item}`),
+    (item, index) => `${index + 1}. ${item}`,
+  );
+
+  return children;
+}
+
+function createTranscriptHeader(segment: TranscriptSegment, isFirstSegment: boolean): Paragraph {
+  const timestamp = `[${formatTimestamp(segment.start)} - ${formatTimestamp(segment.end)}]`;
+  const speakerLabel = typeof segment.speaker === "string" ? segment.speaker.trim() : "";
+  const showSpeaker = speakerLabel && speakerLabel.toLowerCase() !== "null";
+
+  return new Paragraph({
+    children: [
+      new TextRun({
+        text: timestamp,
+        color: "666666",
+        size: 18,
+      }),
+      ...(showSpeaker
+        ? [
+            new TextRun({
+              text: ` (${speakerLabel})`,
+              bold: true,
+              size: 20,
+            }),
+          ]
+        : []),
+    ],
+    spacing: {
+      before: isFirstSegment ? 0 : SECTION_SPACING.transcriptBefore,
+      after: SECTION_SPACING.transcriptHeaderAfter,
+    },
+  });
+}
+
+function buildTranscriptSection(segments: TranscriptSegment[]): Paragraph[] {
+  const children: Paragraph[] = [
+    createHeading("Bản ghi âm chi tiết", HeadingLevel.HEADING_2, {
+      before: SECTION_SPACING.sectionBefore,
+      after: SECTION_SPACING.headingAfter,
+    }),
+  ];
+
+  segments.forEach((segment, index) => {
+    children.push(createTranscriptHeader(segment, index === 0));
+    children.push(createPlainParagraph(segment.text));
+  });
+
+  return children;
+}
+
+function downloadBlob(blob: Blob, fileName: string): void {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
 export interface ExportOptions {
   meeting: Meeting;
   segments?: TranscriptSegment[];
@@ -50,189 +223,22 @@ export interface ExportOptions {
 export async function exportMeetingToDocx(options: ExportOptions): Promise<void> {
   const { meeting, segments, summary, includeSummary, includeTranscript } = options;
 
-  const children: Paragraph[] = [];
-
-  // Title
-  children.push(
+  const children: Paragraph[] = [
     new Paragraph({
       text: meeting.title,
       heading: HeadingLevel.HEADING_1,
       alignment: AlignmentType.CENTER,
-      spacing: { after: 200 },
-    })
-  );
-
-  // Metadata section
-  children.push(
-    new Paragraph({
-      text: "Thong tin cuoc hop",
-      heading: HeadingLevel.HEADING_2,
-      spacing: { before: 200, after: 100 },
-    })
-  );
-
-  children.push(
-    new Paragraph({
-      children: [
-        new TextRun({ text: "ID: ", bold: true }),
-        new TextRun(meeting.id),
-      ],
-      spacing: { after: 50 },
-    })
-  );
-
-  children.push(
-    new Paragraph({
-      children: [
-        new TextRun({ text: "Trang thai: ", bold: true }),
-        new TextRun(meeting.status),
-      ],
-      spacing: { after: 50 },
-    })
-  );
-
-  children.push(
-    new Paragraph({
-      children: [
-        new TextRun({ text: "File goc: ", bold: true }),
-        new TextRun(meeting.original_filename),
-      ],
-      spacing: { after: 50 },
-    })
-  );
-
-  children.push(
-    new Paragraph({
-      children: [
-        new TextRun({ text: "Ngay tao: ", bold: true }),
-        new TextRun(formatDate(meeting.created_at)),
-      ],
-      spacing: { after: 200 },
-    })
-  );
+      spacing: { after: SECTION_SPACING.titleAfter },
+    }),
+    ...buildMetadataSection(meeting),
+  ];
 
   if (includeSummary && summary) {
-    children.push(
-      new Paragraph({
-        text: "Tom tat cuoc hop",
-        heading: HeadingLevel.HEADING_2,
-        spacing: { before: 300, after: 100 },
-      })
-    );
-
-    if (summary.summary) {
-      children.push(
-        new Paragraph({
-          text: "Tong quan",
-          heading: HeadingLevel.HEADING_3,
-          spacing: { before: 200, after: 100 },
-        })
-      );
-
-      children.push(
-        new Paragraph({
-          text: summary.summary,
-          spacing: { after: 200 },
-        })
-      );
-    }
-
-    if (summary.decisions.length > 0) {
-      children.push(
-        new Paragraph({
-          text: "Quyet dinh va diem quan trong",
-          heading: HeadingLevel.HEADING_3,
-          spacing: { before: 200, after: 100 },
-        })
-      );
-
-      summary.decisions.forEach((decision, index) => {
-        children.push(
-          new Paragraph({
-            text: `${index + 1}. ${decision}`,
-            spacing: { after: 100 },
-          })
-        );
-      });
-    }
-
-    if (summary.tasks.length > 0) {
-      children.push(
-        new Paragraph({
-          text: "Cong viec can thuc hien",
-          heading: HeadingLevel.HEADING_3,
-          spacing: { before: 200, after: 100 },
-        })
-      );
-
-      summary.tasks.forEach((item, index) => {
-        const line = `${index + 1}. ${item.task} | Phu trach: ${item.owner || "Chua ro"} | Han: ${item.deadline || "Chua ro"}`;
-        children.push(
-          new Paragraph({
-            text: line,
-            spacing: { after: 100 },
-          })
-        );
-      });
-    }
-
-    if (summary.deadlines.length > 0) {
-      children.push(
-        new Paragraph({
-          text: "Moc thoi gian",
-          heading: HeadingLevel.HEADING_3,
-          spacing: { before: 200, after: 100 },
-        })
-      );
-
-      summary.deadlines.forEach((deadline, index) => {
-        children.push(
-          new Paragraph({
-            text: `${index + 1}. ${deadline.date}: ${deadline.item}`,
-            spacing: { after: 100 },
-          })
-        );
-      });
-    }
+    children.push(...buildSummarySection(summary));
   }
 
   if (includeTranscript && segments && segments.length > 0) {
-    children.push(
-      new Paragraph({
-        text: "Ban ghi am chi tiet",
-        heading: HeadingLevel.HEADING_2,
-        spacing: { before: 300, after: 100 },
-      })
-    );
-
-    segments.forEach((segment, index) => {
-      const timestamp = `[${formatTimestamp(segment.start)} - ${formatTimestamp(segment.end)}]`;
-
-      children.push(
-        new Paragraph({
-          children: [
-            new TextRun({
-              text: timestamp,
-              color: "666666",
-              size: 18,
-            }),
-            new TextRun({
-              text: ` (${segment.speaker})`,
-              bold: true,
-              size: 20,
-            }),
-          ],
-          spacing: { before: index === 0 ? 0 : 150, after: 50 },
-        })
-      );
-
-      children.push(
-        new Paragraph({
-          text: segment.text,
-          spacing: { after: 100 },
-        })
-      );
-    });
+    children.push(...buildTranscriptSection(segments));
   }
 
   const doc = new Document({
@@ -245,12 +251,5 @@ export async function exportMeetingToDocx(options: ExportOptions): Promise<void>
   });
 
   const blob = await Packer.toBlob(doc);
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `${meeting.title || "meeting"}-${meeting.id}.docx`;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
+  downloadBlob(blob, `${meeting.title || "meeting"}-${meeting.id}.docx`);
 }

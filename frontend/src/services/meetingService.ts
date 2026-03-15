@@ -1,23 +1,20 @@
-/**
+﻿/**
  * Meeting service for API interactions
  */
 
-import type { Meeting, TranscriptResponse, MeetingSummary, TranscriptSegment, SummarizeResponse } from "@/types/meeting";
+import { apiRequest, getAuthHeaders } from "@/services/apiClient";
+import type {
+  Meeting,
+  MeetingSummary,
+  SummarizeResponse,
+  TranscriptResponse,
+  TranscriptSegment,
+} from "@/types/meeting";
 
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
-
-/**
- * Get authorization headers with Bearer token
- */
-function getAuthHeaders(): HeadersInit {
-  const token = localStorage.getItem('verba_token');
-  if (!token) {
-    throw new Error('No authentication token found. Please login.');
-  }
-  return {
-    'Authorization': `Bearer ${token}`,
-  };
+interface ServiceResult<T> {
+  success: boolean;
+  data?: T;
+  error?: string;
 }
 
 export interface CreateMeetingPayload {
@@ -25,400 +22,167 @@ export interface CreateMeetingPayload {
   audio: File;
 }
 
-export interface CreateMeetingResponse {
-  success: boolean;
-  data?: Meeting;
-  error?: string;
+interface StartTranscriptionResponse {
+  message: string;
+  meeting_id: string;
+}
+
+function buildMeetingPath(id: string, suffix = ""): string {
+  return `/meetings/${encodeURIComponent(id)}${suffix}`;
+}
+
+async function safeRequest<T>(
+  action: string,
+  request: () => Promise<T>,
+): Promise<ServiceResult<T>> {
+  try {
+    const data = await request();
+    return { success: true, data };
+  } catch (error) {
+    console.error(`Error ${action}:`, error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : `Failed to ${action}`,
+    };
+  }
 }
 
 /**
  * Creates a new meeting by uploading audio file
- * @param payload - Object containing title and audio file
- * @returns Promise with meeting data or error
  */
 export async function createMeeting(
   payload: CreateMeetingPayload,
-): Promise<CreateMeetingResponse> {
-  try {
+): Promise<ServiceResult<Meeting>> {
+  return safeRequest("creating meeting", async () => {
     const formData = new FormData();
     formData.append("title", payload.title);
     formData.append("audio", payload.audio);
 
-    const response = await fetch(`${API_BASE_URL}/meetings/upload`, {
+    return apiRequest<Meeting>("/meetings/upload", {
       method: "POST",
-      headers: getAuthHeaders(),
       body: formData,
-      // Don't set Content-Type header - browser will set it with boundary for multipart/form-data
+      headers: getAuthHeaders(),
     });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(
-        errorData.message || `HTTP error! status: ${response.status}`,
-      );
-    }
-
-    const data = await response.json();
-
-    return {
-      success: true,
-      data: data,
-    };
-  } catch (error) {
-    console.error("Error creating meeting:", error);
-
-    return {
-      success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to upload meeting",
-    };
-  }
+  });
 }
 
 /**
  * Fetches all meetings
- * @returns Promise with meetings array or error
  */
-export async function getMeetings(): Promise<{
-  success: boolean;
-  data?: Meeting[];
-  error?: string;
-}> {
-  try {
-    const response = await fetch(`${API_BASE_URL}/meetings/`, {
+export async function getMeetings(): Promise<ServiceResult<Meeting[]>> {
+  return safeRequest("fetching meetings", () =>
+    apiRequest<Meeting[]>("/meetings/", {
       method: "GET",
-      headers: getAuthHeaders(),
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(
-        errorData.message || `HTTP error! status: ${response.status}`,
-      );
-    }
-
-    const data: Meeting[] = await response.json();
-
-    return {
-      success: true,
-      data,
-    };
-  } catch (error) {
-    console.error("Error fetching meetings:", error);
-
-    return {
-      success: false,
-      error:
-        error instanceof Error ? error.message : "Failed to fetch meetings",
-    };
-  }
+      requireAuth: true,
+    }),
+  );
 }
 
 /**
- * Fetches meeting metadata by ID (Approach 2: no transcript)
- * @param id - Meeting ID
- * @returns Promise with meeting metadata or error
+ * Fetches meeting metadata by ID
  */
-export async function getMeetingById(id: string): Promise<{
-  success: boolean;
-  data?: Meeting;
-  error?: string;
-}> {
-  try {
-    const response = await fetch(
-      `${API_BASE_URL}/meetings/${encodeURIComponent(id)}`,
-      {
-        method: "GET",
-        headers: getAuthHeaders(),
-      },
-    );
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(
-        errorData.detail || errorData.message || `HTTP error! status: ${response.status}`,
-      );
-    }
-
-    const data: Meeting = await response.json();
-
-    return {
-      success: true,
-      data,
-    };
-  } catch (error) {
-    console.error("Error fetching meeting by id:", error);
-
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Failed to fetch meeting",
-    };
-  }
+export async function getMeetingById(id: string): Promise<ServiceResult<Meeting>> {
+  return safeRequest("fetching meeting by id", () =>
+    apiRequest<Meeting>(buildMeetingPath(id), {
+      method: "GET",
+      requireAuth: true,
+    }),
+  );
 }
 
 /**
- * Fetches transcript for a meeting (Approach 2: separate endpoint)
- * @param id - Meeting ID
- * @returns Promise with transcript data or error
+ * Fetches transcript for a meeting
  */
-export async function getTranscriptByMeetingId(id: string): Promise<{
-  success: boolean;
-  data?: TranscriptResponse;
-  error?: string;
-}> {
-  try {
-    const response = await fetch(
-      `${API_BASE_URL}/meetings/${encodeURIComponent(id)}/transcript`,
-      {
-        method: "GET",
-        headers: getAuthHeaders(),
-      },
-    );
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(
-        errorData.message || `HTTP error! status: ${response.status}`,
-      );
-    }
-
-    const data: TranscriptResponse = await response.json();
-
-    return {
-      success: true,
-      data,
-    };
-  } catch (error) {
-    console.error("Error fetching transcript:", error);
-
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Failed to fetch transcript",
-    };
-  }
+export async function getTranscriptByMeetingId(
+  id: string,
+): Promise<ServiceResult<TranscriptResponse>> {
+  return safeRequest("fetching transcript", () =>
+    apiRequest<TranscriptResponse>(buildMeetingPath(id, "/transcript"), {
+      method: "GET",
+      requireAuth: true,
+    }),
+  );
 }
 
 /**
  * Updates edited segments in transcript
- * @param id - Meeting ID
- * @param editedSegments - Full segments array (replace-all)
- * @returns Promise with updated transcript or error
  */
 export async function updateTranscript(
   id: string,
-  editedSegments: Array<{ index: number; text: string }>
-): Promise<{
-  success: boolean;
-  data?: TranscriptResponse;
-  error?: string;
-}> {
-  try {
-    const response = await fetch(
-      `${API_BASE_URL}/meetings/${encodeURIComponent(id)}/transcript`,
-      {
-        method: "PATCH",
-        headers: {
-          ...getAuthHeaders(),
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ segments: editedSegments }),
+  editedSegments: Array<{ index: number; text: string }>,
+): Promise<ServiceResult<TranscriptResponse>> {
+  return safeRequest("updating transcript", () =>
+    apiRequest<TranscriptResponse>(buildMeetingPath(id, "/transcript"), {
+      method: "PATCH",
+      requireAuth: true,
+      headers: {
+        "Content-Type": "application/json",
       },
-    );
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(
-        errorData.message || `HTTP error! status: ${response.status}`,
-      );
-    }
-
-    const data: TranscriptResponse = await response.json();
-
-    return {
-      success: true,
-      data,
-    };
-  } catch (error) {
-    console.error("Error updating transcript:", error);
-
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Failed to update transcript",
-    };
-  }
+      body: JSON.stringify({ segments: editedSegments }),
+    }),
+  );
 }
 
 /**
  * Fetches summary for a meeting
- * @param id - Meeting ID
- * @returns Promise with structured summary data or error
  */
-export async function getMeetingSummaryById(id: string): Promise<{
-  success: boolean;
-  data?: MeetingSummary;
-  error?: string;
-}> {
-  try {
-    const response = await fetch(
-      `${API_BASE_URL}/meetings/${encodeURIComponent(id)}/summary`,
-      {
-        method: "GET",
-        headers: getAuthHeaders(),
-      },
-    );
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(
-        errorData.detail || errorData.message || `HTTP error! status: ${response.status}`,
-      );
-    }
-
-    const data: MeetingSummary = await response.json();
-
-    return {
-      success: true,
-      data,
-    };
-  } catch (error) {
-    console.error("Error fetching summary:", error);
-
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Failed to fetch summary",
-    };
-  }
+export async function getMeetingSummaryById(
+  id: string,
+): Promise<ServiceResult<MeetingSummary>> {
+  return safeRequest("fetching summary", () =>
+    apiRequest<MeetingSummary>(buildMeetingPath(id, "/summary"), {
+      method: "GET",
+      requireAuth: true,
+    }),
+  );
 }
 
 /**
  * Generate summary from transcript segments
- * @param id - Meeting ID
- * @param segments - Current transcript segments
- * @returns Promise with summary data or error
  */
 export async function summarizeMeeting(
   id: string,
-  segments: TranscriptSegment[]
-): Promise<{
-  success: boolean;
-  data?: SummarizeResponse;
-  error?: string;
-}> {
-  try {
-    const response = await fetch(
-      `${API_BASE_URL}/summarize`,
-      {
-        method: "POST",
-        headers: {
-          ...getAuthHeaders(),
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ id, segments }),
+  segments: TranscriptSegment[],
+): Promise<ServiceResult<SummarizeResponse>> {
+  return safeRequest("generating summary", () =>
+    apiRequest<SummarizeResponse>("/summarize", {
+      method: "POST",
+      requireAuth: true,
+      headers: {
+        "Content-Type": "application/json",
       },
-    );
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(
-        errorData.detail || errorData.message || `HTTP error! status: ${response.status}`,
-      );
-    }
-
-    const data: SummarizeResponse = await response.json();
-
-    return {
-      success: true,
-      data,
-    };
-  } catch (error) {
-    console.error("Error generating summary:", error);
-
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Failed to generate summary",
-    };
-  }
+      body: JSON.stringify({ id, segments }),
+    }),
+  );
 }
 
 /**
  * Starts transcription for a meeting
- * @param id - Meeting ID
- * @param language - Language code (default: "vi")
- * @returns Promise with success status or error
  */
 export async function startTranscription(
   id: string,
-  language: string = "vi"
-): Promise<{
-  success: boolean;
-  data?: { message: string; meeting_id: string };
-  error?: string;
-}> {
-  try {
-    const response = await fetch(
-      `${API_BASE_URL}/meetings/${encodeURIComponent(id)}/transcribe`,
-      {
-        method: "POST",
-        headers: {
-          ...getAuthHeaders(),
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ language }),
+  language = "vi",
+): Promise<ServiceResult<StartTranscriptionResponse>> {
+  return safeRequest("starting transcription", () =>
+    apiRequest<StartTranscriptionResponse>(buildMeetingPath(id, "/transcribe"), {
+      method: "POST",
+      requireAuth: true,
+      headers: {
+        "Content-Type": "application/json",
       },
-    );
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(
-        errorData.detail || errorData.message || `HTTP error! status: ${response.status}`,
-      );
-    }
-
-    const data = await response.json();
-    return { success: true, data };
-  } catch (error) {
-    console.error("Error starting transcription:", error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Failed to start transcription",
-    };
-  }
+      body: JSON.stringify({ language }),
+    }),
+  );
 }
 
 /**
  * Deletes a meeting
- * @param id - Meeting ID
- * @returns Promise with success status or error
  */
-export async function deleteMeeting(id: string): Promise<{
-  success: boolean;
-  error?: string;
-}> {
-  try {
-    const response = await fetch(
-      `${API_BASE_URL}/meetings/${encodeURIComponent(id)}`,
-      {
-        method: "DELETE",
-        headers: getAuthHeaders(),
-      },
-    );
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(
-        errorData.detail || errorData.message || `HTTP error! status: ${response.status}`,
-      );
-    }
-
-    return {
-      success: true,
-    };
-  } catch (error) {
-    console.error("Error deleting meeting:", error);
-
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Failed to delete meeting",
-    };
-  }
+export async function deleteMeeting(id: string): Promise<ServiceResult<undefined>> {
+  return safeRequest("deleting meeting", () =>
+    apiRequest<undefined>(buildMeetingPath(id), {
+      method: "DELETE",
+      requireAuth: true,
+    }),
+  );
 }

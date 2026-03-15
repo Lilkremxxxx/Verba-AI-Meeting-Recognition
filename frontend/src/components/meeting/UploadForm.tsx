@@ -1,18 +1,16 @@
-import { useState, useCallback } from "react";
-import { useDropzone } from "react-dropzone";
-import { motion, AnimatePresence } from "framer-motion";
-import { Upload, FileAudio, X, AlertCircle, CheckCircle2 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+﻿import { useState, useCallback } from "react";
+import { type FileRejection, useDropzone } from "react-dropzone";
+import { AnimatePresence, motion } from "framer-motion";
+import { AlertCircle, CheckCircle2, FileAudio, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-
-import { validateAudioFile, formatFileSize } from "@/utils/fileValidation";
 import { createMeeting } from "@/services/meetingService";
+import { formatFileSize, validateAudioFile } from "@/utils/fileValidation";
 
 interface UploadFormProps {
   onUpload?: (title: string, file: File) => void;
@@ -23,8 +21,25 @@ const ACCEPTED_FORMATS = {
   "audio/wav": [".wav"],
 };
 
+function getDropzoneError(rejectedFiles: FileRejection[]): string | null {
+  if (rejectedFiles.length === 0) {
+    return null;
+  }
+
+  const firstErrorCode = rejectedFiles[0].errors[0]?.code;
+
+  if (firstErrorCode === "file-too-large") {
+    return "File quá lớn. Kích thước tối đa là 500MB.";
+  }
+
+  if (firstErrorCode === "file-invalid-type") {
+    return "Định dạng file không hợp lệ. Chỉ chấp nhận .mp3 hoặc .wav.";
+  }
+
+  return "Không thể xử lý file đã chọn. Vui lòng thử lại.";
+}
+
 export function UploadForm({ onUpload }: UploadFormProps) {
-  const navigate = useNavigate();
   const [title, setTitle] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -32,35 +47,30 @@ export function UploadForm({ onUpload }: UploadFormProps) {
   const [uploadSuccess, setUploadSuccess] = useState(false);
 
   const onDrop = useCallback(
-    (acceptedFiles: File[], rejectedFiles: any[]) => {
+    (acceptedFiles: File[], rejectedFiles: FileRejection[]) => {
       setError(null);
       setUploadSuccess(false);
 
-      if (rejectedFiles.length > 0) {
-        const rejection = rejectedFiles[0];
-        if (rejection.errors[0]?.code === "file-too-large") {
-          setError("File quá lớn. Kích thước tối đa là 500MB.");
-        } else if (rejection.errors[0]?.code === "file-invalid-type") {
-          setError("Định dạng file không hợp lệ. Chỉ chấp nhận .mp3 hoặc .wav");
-        }
+      const dropzoneError = getDropzoneError(rejectedFiles);
+      if (dropzoneError) {
+        setError(dropzoneError);
         return;
       }
 
-      if (acceptedFiles.length > 0) {
-        const selectedFile = acceptedFiles[0];
+      const selectedFile = acceptedFiles[0];
+      if (!selectedFile) {
+        return;
+      }
 
-        // Validate file with both MIME type and extension
-        const validation = validateAudioFile(selectedFile);
-        if (!validation.ok) {
-          setError(validation.error || "Invalid file");
-          return;
-        }
+      const validation = validateAudioFile(selectedFile);
+      if (!validation.ok) {
+        setError(validation.error || "Invalid file");
+        return;
+      }
 
-        setFile(selectedFile);
-        if (!title) {
-          const fileName = selectedFile.name.replace(/\.[^/.]+$/, "");
-          setTitle(fileName);
-        }
+      setFile(selectedFile);
+      if (!title) {
+        setTitle(selectedFile.name.replace(/\.[^/.]+$/, ""));
       }
     },
     [title],
@@ -69,24 +79,23 @@ export function UploadForm({ onUpload }: UploadFormProps) {
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: ACCEPTED_FORMATS,
-    maxSize: 500 * 1024 * 1024, // 500MB
+    maxSize: 500 * 1024 * 1024,
     multiple: false,
   });
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
 
     if (!title.trim()) {
-      setError("Vui lòng nhập tiêu đề cuộc họp");
+      setError("Vui lòng nhập tiêu đề cuộc họp.");
       return;
     }
 
     if (!file) {
-      setError("Vui lòng chọn file ghi âm");
+      setError("Vui lòng chọn file ghi âm.");
       return;
     }
 
-    // Final validation before upload
     const validation = validateAudioFile(file);
     if (!validation.ok) {
       setError(validation.error || "Invalid file");
@@ -102,34 +111,30 @@ export function UploadForm({ onUpload }: UploadFormProps) {
         audio: file,
       });
 
-      if (result.success && result.data) {
-        setUploadSuccess(true);
-        toast.success("Tải lên thành công!", {
-          description: `Cuộc họp "${title}" đã được tạo.`,
-        });
-
-        // Call optional callback
-        if (onUpload) {
-          onUpload(title, file);
-        }
-
-        // Reset form after short delay
-        setTimeout(() => {
-          setTitle("");
-          setFile(null);
-          setUploadSuccess(false);
-
-          // Navigate to meeting detail if route exists
-        }, 1500);
-      } else {
-        setError(result.error || "Không thể tải lên. Vui lòng thử lại.");
+      if (!result.success || !result.data) {
+        const uploadError = result.error || "Không thể tải lên. Vui lòng thử lại.";
+        setError(uploadError);
         toast.error("Lỗi tải lên", {
-          description: result.error || "Đã xảy ra lỗi khi tải lên file.",
+          description: uploadError,
         });
+        return;
       }
+
+      setUploadSuccess(true);
+      toast.success("Tải lên thành công!", {
+        description: `Cuộc họp "${title}" đã được tạo.`,
+      });
+
+      onUpload?.(title, file);
+
+      window.setTimeout(() => {
+        setTitle("");
+        setFile(null);
+        setUploadSuccess(false);
+      }, 1500);
     } catch (err) {
       const errorMessage =
-        err instanceof Error ? err.message : "Đã xảy ra lỗi không xác định";
+        err instanceof Error ? err.message : "Đã xảy ra lỗi không xác định.";
       setError(errorMessage);
       toast.error("Lỗi tải lên", {
         description: errorMessage,
@@ -148,7 +153,7 @@ export function UploadForm({ onUpload }: UploadFormProps) {
   return (
     <Card className="border-border/50 shadow-soft">
       <CardHeader>
-        <CardTitle className="text-lg flex items-center gap-2">
+        <CardTitle className="flex items-center gap-2 text-lg">
           <Upload className="h-5 w-5 text-primary" />
           Tải lên cuộc họp mới
         </CardTitle>
@@ -161,7 +166,7 @@ export function UploadForm({ onUpload }: UploadFormProps) {
               id="title"
               placeholder="VD: Họp Sprint Planning Q1 2026"
               value={title}
-              onChange={(e) => setTitle(e.target.value)}
+              onChange={(event) => setTitle(event.target.value)}
               disabled={isUploading}
             />
           </div>
@@ -179,7 +184,7 @@ export function UploadForm({ onUpload }: UploadFormProps) {
                 >
                   <div
                     {...getRootProps()}
-                    className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all duration-200 ${
+                    className={`cursor-pointer rounded-xl border-2 border-dashed p-8 text-center transition-all duration-200 ${
                       isDragActive
                         ? "border-primary bg-accent"
                         : "border-border hover:border-primary/50 hover:bg-accent/50"
@@ -190,7 +195,7 @@ export function UploadForm({ onUpload }: UploadFormProps) {
                       accept="audio/mpeg,audio/wav,.mp3,.wav"
                     />
                     <div className="flex flex-col items-center gap-3">
-                      <div className="w-14 h-14 rounded-full bg-accent flex items-center justify-center">
+                      <div className="flex h-14 w-14 items-center justify-center rounded-full bg-accent">
                         <Upload className="h-7 w-7 text-accent-foreground" />
                       </div>
                       <div>
@@ -199,7 +204,7 @@ export function UploadForm({ onUpload }: UploadFormProps) {
                             ? "Thả file vào đây"
                             : "Kéo thả file hoặc click để chọn"}
                         </p>
-                        <p className="text-sm text-muted-foreground mt-1">
+                        <p className="mt-1 text-sm text-muted-foreground">
                           Hỗ trợ .mp3, .wav (tối đa 500MB)
                         </p>
                       </div>
@@ -212,20 +217,19 @@ export function UploadForm({ onUpload }: UploadFormProps) {
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
-                  className="border rounded-xl p-4 bg-accent/30"
+                  className="rounded-xl border bg-accent/30 p-4"
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
                         <FileAudio className="h-5 w-5 text-primary" />
                       </div>
                       <div>
-                        <p className="font-medium text-foreground truncate max-w-[200px]">
+                        <p className="max-w-[200px] truncate font-medium text-foreground">
                           {file.name}
                         </p>
                         <p className="text-sm text-muted-foreground">
-                          {formatFileSize(file.size)} •{" "}
-                          {file.type || "Unknown type"}
+                          {formatFileSize(file.size)} • {file.type || "Unknown type"}
                         </p>
                       </div>
                     </div>
@@ -266,7 +270,7 @@ export function UploadForm({ onUpload }: UploadFormProps) {
 
           <Button
             type="submit"
-            className="w-full gradient-primary hover:opacity-90"
+            className="gradient-primary w-full hover:opacity-90"
             disabled={isUploading || !file || !title.trim()}
           >
             {isUploading ? "Đang tải lên..." : "Tải lên"}
