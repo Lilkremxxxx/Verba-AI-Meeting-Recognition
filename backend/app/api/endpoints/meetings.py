@@ -1,4 +1,5 @@
-﻿import os
+﻿import json
+import os
 import uuid
 import logging
 from typing import Optional
@@ -8,7 +9,12 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
 from app.api.endpoints.auth import get_current_user
 from app.db.session import get_db
-from app.schemas.meeting import SummarizeByIdRequest, SummarizeByIdResponse
+from app.schemas.meeting import (
+    SummarizeByIdRequest,
+    SummarizeByIdResponse,
+    SummaryData,
+    SummaryUpdateRequest,
+)
 from app.schemas.user import UserOut
 from app.services.storage.local import LocalStorageService
 from app.services.summary_service import (
@@ -21,6 +27,29 @@ from app.services.summary_service import (
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+async def ensure_done_status_if_completed(
+    db: asyncpg.Connection,
+    meeting: dict,
+    user_id: str,
+) -> dict:
+    has_transcript = bool(meeting.get('transcript')) or bool(meeting.get('transcript_json'))
+    has_summary = bool(meeting.get('summary'))
+
+    if meeting.get('status') != 'DONE' and has_transcript and has_summary:
+        await db.execute(
+            '''
+            UPDATE meetings
+            SET status = 'DONE', updated_at = NOW()
+            WHERE id = $1 AND user_id = $2
+            ''',
+            meeting['id'],
+            user_id,
+        )
+        meeting['status'] = 'DONE'
+
+    return meeting
 
 
 async def get_user_meeting(
@@ -38,7 +67,39 @@ async def get_user_meeting(
         meeting_id,
         user_id,
     )
-    return dict(row) if row else None
+    if not row:
+        return None
+
+    meeting = dict(row)
+    return await ensure_done_status_if_completed(db, meeting, user_id)
+
+
+def normalize_summary_update(request: SummaryUpdateRequest) -> SummaryData:
+    decisions = [item.strip() for item in request.decisions if item and item.strip()]
+    tasks = [
+        {
+            'task': task.task.strip(),
+            'owner': task.owner.strip() if task.owner and task.owner.strip() else None,
+            'deadline': task.deadline.strip() if task.deadline and task.deadline.strip() else None,
+        }
+        for task in request.tasks
+        if task.task.strip() or (task.owner and task.owner.strip()) or (task.deadline and task.deadline.strip())
+    ]
+    deadlines = [
+        {
+            'date': deadline.date.strip(),
+            'item': deadline.item.strip(),
+        }
+        for deadline in request.deadlines
+        if deadline.date.strip() or deadline.item.strip()
+    ]
+
+    return SummaryData(
+        summary=request.summary.strip(),
+        decisions=decisions,
+        tasks=tasks,
+        deadlines=deadlines,
+    )
 
 
 @router.get('/')
@@ -51,16 +112,19 @@ async def get_all_meetings(
             'SELECT * FROM meetings WHERE user_id = $1 ORDER BY created_at DESC',
             current_user.id,
         )
-        return [
-            {
-                'id': str(row['id']),
-                'title': row['title'],
-                'original_filename': row['original_filename'],
-                'status': row['status'],
-                'created_at': row['created_at'].isoformat(),
-            }
-            for row in rows
-        ]
+        meetings = []
+        for row in rows:
+            meeting = await ensure_done_status_if_completed(db, dict(row), str(current_user.id))
+            meetings.append(
+                {
+                    'id': str(meeting['id']),
+                    'title': meeting['title'],
+                    'original_filename': meeting['original_filename'],
+                    'status': meeting['status'],
+                    'created_at': meeting['created_at'].isoformat(),
+                }
+            )
+        return meetings
     except asyncpg.PostgresError as exc:
         logger.error('[Meetings] Database error while listing meetings: %s', exc)
         raise HTTPException(status_code=500, detail=f'Database error: {exc}')
@@ -81,14 +145,15 @@ async def get_meeting_detail(
         if not row:
             raise HTTPException(status_code=404, detail='Meeting not found')
 
+        meeting = await ensure_done_status_if_completed(db, dict(row), str(current_user.id))
         storage = LocalStorageService()
         return {
-            'id': str(row['id']),
-            'title': row['title'],
-            'status': row['status'],
-            'original_filename': row['original_filename'],
-            'created_at': row['created_at'].isoformat(),
-            'audioUrl': storage.get_url(row['storage_path']),
+            'id': str(meeting['id']),
+            'title': meeting['title'],
+            'status': meeting['status'],
+            'original_filename': meeting['original_filename'],
+            'created_at': meeting['created_at'].isoformat(),
+            'audioUrl': storage.get_url(meeting['storage_path']),
         }
     except HTTPException:
         raise
@@ -234,3 +299,34 @@ async def get_meeting_summary(
     except Exception as exc:
         logger.error('[GetSummary] Unexpected error: %s', exc, exc_info=True)
         raise HTTPException(status_code=500, detail=f'Failed to get summary: {exc}')
+
+
+@router.patch('/{meeting_id}/summary', response_model=SummarizeByIdResponse)
+async def patch_meeting_summary(
+    meeting_id: str,
+    request: SummaryUpdateRequest,
+    db: asyncpg.Connection = Depends(get_db),
+    current_user: UserOut = Depends(get_current_user),
+):
+    try:
+        meeting = await get_user_meeting(db, meeting_id, str(current_user.id))
+        if not meeting:
+            raise HTTPException(status_code=404, detail='Meeting not found')
+
+        summary_data = normalize_summary_update(request)
+        await db.execute(
+            '''
+            UPDATE meetings
+            SET summary = $1::jsonb, status = 'DONE', updated_at = NOW()
+            WHERE id = $2 AND user_id = $3
+            ''',
+            json.dumps(summary_data.model_dump(), ensure_ascii=False),
+            meeting_id,
+            current_user.id,
+        )
+        return build_summary_response(summary_data)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error('[PatchSummary] Unexpected error: %s', exc, exc_info=True)
+        raise HTTPException(status_code=500, detail=f'Failed to update summary: {exc}')

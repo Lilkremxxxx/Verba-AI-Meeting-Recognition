@@ -1,7 +1,10 @@
-from pydantic import BaseModel
+﻿from pydantic import BaseModel
 from typing import List
 import os
+
 os.environ["TRANSFORMERS_VERIFY_TORCH_LOAD_IS_SAFE"] = "false"
+
+
 class SegmentOut(BaseModel):
     start: float
     end: float
@@ -17,6 +20,15 @@ class TranscriptOut(BaseModel):
 
 class TranscriptUpdateRequest(BaseModel):
     segments: List[SegmentOut]
+
+
+class TranscriptEditItem(BaseModel):
+    index: int
+    text: str
+
+
+class TranscriptPatchRequest(BaseModel):
+    edits: List[TranscriptEditItem]
 
 
 # Giữ lại cho background task transcription (dùng nội bộ)

@@ -8,7 +8,7 @@ from app.api.api_router import api_router
 from app.core.settings import settings
 from app.db.session import close_pool, create_pool
 
-
+# python -m uvicorn app.main:app --reload
 app = FastAPI(title='AI Meeting')
 
 app.add_middleware(

@@ -24,6 +24,13 @@ class SummaryData(BaseModel):
     deadlines: List[DeadlineItem]
 
 
+class SummaryUpdateRequest(BaseModel):
+    summary: str
+    decisions: List[str]
+    tasks: List[TaskItem]
+    deadlines: List[DeadlineItem]
+
+
 class SummarizeByIdResponse(BaseModel):
     summary: str
     decisions: List[str]

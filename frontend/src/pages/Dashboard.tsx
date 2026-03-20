@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+﻿import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { FileAudio, ChevronRight, AlertCircle } from "lucide-react";
@@ -31,9 +31,6 @@ export default function Dashboard() {
         throw new Error(result.error || "Không thể tải danh sách cuộc họp");
       }
 
-      // Inject ONE demo DONE meeting for testing
-
-      // Prepend demo meeting to the list
       setMeetings([...result.data]);
     } catch (err) {
       setError(
@@ -53,7 +50,7 @@ export default function Dashboard() {
       DONE: {
         label: "Hoàn tất",
         variant: "default" as const,
-        className: "bg-green-500 hover:bg-green-600",
+        className: "bg-green-600 hover:bg-green-700",
       },
       PROCESSING: {
         label: "Đang xử lý",
@@ -63,7 +60,7 @@ export default function Dashboard() {
       QUEUED: {
         label: "Đang chờ",
         variant: "outline" as const,
-        className: "border-blue-500 text-blue-600",
+        className: "border-green-700 text-green-700",
       },
       FAILED: {
         label: "Thất bại",
@@ -81,34 +78,29 @@ export default function Dashboard() {
   };
 
   const handleMeetingClick = (meeting: Meeting) => {
-    // Allow navigation for ALL statuses
     navigate(`/meetings/${meeting.id}`);
   };
 
   const handleUpload = () => {
-    // After upload, refresh the meetings list
     fetchMeetings();
   };
 
   return (
     <AppLayout>
       <div className="space-y-8">
-        {/* Header */}
         <div>
           <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
-          <p className="text-muted-foreground mt-1">
+          <p className="mt-1 text-muted-foreground">
             Quản lý và theo dõi các cuộc họp của bạn
           </p>
         </div>
 
-        <div className="grid lg:grid-cols-3 gap-8">
-          {/* Upload Form - Left Panel */}
+        <div className="grid gap-8 lg:grid-cols-3">
           <div className="lg:col-span-1">
             <UploadForm onUpload={handleUpload} />
           </div>
 
-          {/* Meetings List - Right Panel */}
-          <div className="lg:col-span-2 space-y-4">
+          <div className="space-y-4 lg:col-span-2">
             <div className="flex items-center justify-between gap-4">
               <h2 className="text-xl font-semibold text-foreground">
                 Cuộc họp của bạn
@@ -120,7 +112,6 @@ export default function Dashboard() {
               )}
             </div>
 
-            {/* Loading State */}
             {loading && (
               <div className="space-y-3">
                 {[1, 2, 3].map((i) => (
@@ -139,7 +130,6 @@ export default function Dashboard() {
               </div>
             )}
 
-            {/* Error State */}
             {!loading && error && (
               <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
@@ -157,17 +147,16 @@ export default function Dashboard() {
               </Alert>
             )}
 
-            {/* Empty State */}
             {!loading && !error && meetings.length === 0 && (
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 className="flex flex-col items-center justify-center py-16 text-center"
               >
-                <div className="w-20 h-20 rounded-full bg-accent flex items-center justify-center mb-4">
-                  <FileAudio className="w-10 h-10 text-accent-foreground" />
+                <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-accent">
+                  <FileAudio className="h-10 w-10 text-accent-foreground" />
                 </div>
-                <h3 className="text-lg font-medium text-foreground mb-1">
+                <h3 className="mb-1 text-lg font-medium text-foreground">
                   Chưa có cuộc họp nào
                 </h3>
                 <p className="text-muted-foreground">
@@ -176,7 +165,6 @@ export default function Dashboard() {
               </motion.div>
             )}
 
-            {/* Meetings List */}
             {!loading && !error && meetings.length > 0 && (
               <motion.div
                 initial={{ opacity: 0 }}
@@ -191,19 +179,17 @@ export default function Dashboard() {
                     transition={{ delay: index * 0.05 }}
                   >
                     <Card
-                      className="p-4 hover:bg-accent/50 transition-colors cursor-pointer"
+                      className="cursor-pointer p-4 transition-colors hover:bg-accent/50"
                       onClick={() => handleMeetingClick(meeting)}
                     >
                       <div className="flex items-center gap-4">
-                        {/* Icon */}
-                        <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                        <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-primary/10">
                           <FileAudio className="h-5 w-5 text-primary" />
                         </div>
 
-                        {/* Content */}
-                        <div className="flex-1 min-w-0">
+                        <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
-                            <h3 className="font-semibold text-foreground truncate">
+                            <h3 className="truncate font-semibold text-foreground">
                               {meeting.title}
                             </h3>
                             {meeting.id === "demo-done-meeting" && (
@@ -212,7 +198,7 @@ export default function Dashboard() {
                               </Badge>
                             )}
                           </div>
-                          <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
+                          <div className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
                             <span className="truncate">
                               {meeting.original_filename}
                             </span>
@@ -223,19 +209,16 @@ export default function Dashboard() {
                           </div>
                         </div>
 
-                        {/* Status Badge */}
                         <div className="flex-shrink-0">
                           {getStatusBadge(meeting.status)}
                         </div>
 
-                        {/* Chevron */}
-                        <ChevronRight className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                        <ChevronRight className="h-5 w-5 flex-shrink-0 text-muted-foreground" />
                       </div>
                     </Card>
                   </motion.div>
                 ))}
 
-                {/* View All Button */}
                 {meetings.length > 5 && (
                   <Button
                     variant="outline"

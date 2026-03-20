@@ -14,6 +14,8 @@ import {
   Loader2,
   AlertCircle,
   ArrowLeft,
+  ArrowUp,
+  ArrowDown,
   Play,
   Pause,
   FileAudio,
@@ -74,6 +76,7 @@ import {
   getMeetingSummaryById,
   getTranscriptByMeetingId,
   updateTranscript,
+  updateMeetingSummary,
   deleteMeeting,
   startTranscription,
 } from "@/services/meetingService";
@@ -121,6 +124,7 @@ export default function MeetingDetailPage() {
     new Map(),
   );
   const [savingTranscript, setSavingTranscript] = useState(false);
+  const [savingSummary, setSavingSummary] = useState(false);
 
   // Transcription state
   const [transcribing, setTranscribing] = useState(false);
@@ -531,18 +535,40 @@ export default function MeetingDetailPage() {
     setEditingSummary(false);
   }, [summary]);
 
-  const handleSaveSummaryEdit = useCallback(() => {
-    if (!summaryDraft) return;
+  const handleSaveSummaryEdit = useCallback(async () => {
+    if (!id || !summaryDraft) return;
 
-    const normalizedDraft = normalizeMeetingSummary(summaryDraft);
-    setSummary(normalizedDraft);
-    setSummaryDraft(cloneSummary(normalizedDraft));
-    setEditingSummary(false);
-    toast({
-      title: "Đã cập nhật tóm tắt",
-      description: "Nội dung tóm tắt đã được chỉnh sửa trên giao diện.",
-    });
-  }, [summaryDraft, toast]);
+    setSavingSummary(true);
+    try {
+      const normalizedDraft = normalizeMeetingSummary(summaryDraft);
+      const result = await updateMeetingSummary(id, normalizedDraft);
+
+      if (result.success && result.data) {
+        const savedSummary = normalizeMeetingSummary(result.data);
+        setSummary(savedSummary);
+        setSummaryDraft(cloneSummary(savedSummary));
+        setEditingSummary(false);
+        toast({
+          title: "Đã lưu tóm tắt",
+          description: "Nội dung tóm tắt đã được cập nhật vào hệ thống.",
+        });
+      } else {
+        throw new Error(result.error || "Không thể lưu tóm tắt");
+      }
+    } catch (err) {
+      console.error("Error saving summary:", err);
+      toast({
+        title: "Lỗi khi lưu tóm tắt",
+        description:
+          err instanceof Error
+            ? err.message
+            : "Không thể lưu tóm tắt. Vui lòng thử lại.",
+        variant: "destructive",
+      });
+    } finally {
+      setSavingSummary(false);
+    }
+  }, [id, summaryDraft, toast]);
 
   const handleSummaryTextChange = useCallback((value: string) => {
     setSummaryDraft((prev) => (prev ? { ...prev, summary: value } : prev));
@@ -599,7 +625,7 @@ export default function MeetingDetailPage() {
 
       return {
         ...prev,
-        tasks: [...prev.tasks, { task: "", owner: "", deadline: "" }],
+        tasks: [{ task: "", owner: "", deadline: "" }, ...prev.tasks],
       };
     });
   }, []);
@@ -611,6 +637,23 @@ export default function MeetingDetailPage() {
         ...prev,
         tasks: prev.tasks.filter((_, taskIndex) => taskIndex !== index),
       };
+    });
+  }, []);
+
+  const handleMoveTask = useCallback((index: number, direction: -1 | 1) => {
+    setSummaryDraft((prev) => {
+      if (!prev) return prev;
+
+      const nextIndex = index + direction;
+      if (nextIndex < 0 || nextIndex >= prev.tasks.length) {
+        return prev;
+      }
+
+      const tasks = [...prev.tasks];
+      const [movedTask] = tasks.splice(index, 1);
+      tasks.splice(nextIndex, 0, movedTask);
+
+      return { ...prev, tasks };
     });
   }, []);
 
@@ -732,7 +775,7 @@ export default function MeetingDetailPage() {
       QUEUED: {
         label: "Đang chờ",
         variant: "outline" as const,
-        className: "border-blue-500 text-blue-600",
+        className: "border-green-700 text-green-700",
       },
       FAILED: {
         label: "Thất bại",
@@ -806,8 +849,7 @@ export default function MeetingDetailPage() {
   const hasAudio = !!audioUrl;
   const hasTranscript = segments.length > 0;
   const hasSummary = hasSummaryContent(summary);
-  const displayStatus: MeetingStatus =
-    hasTranscript && hasSummary ? "DONE" : "QUEUED";
+  const displayStatus: MeetingStatus = meeting.status;
 
   // Success state
   return (
@@ -1116,9 +1158,19 @@ export default function MeetingDetailPage() {
                                 onClick={handleSaveSummaryEdit}
                                 size="sm"
                                 className="gap-2"
+                                disabled={savingSummary}
                               >
-                                <Save className="h-4 w-4" />
-                                Lưu chỉnh sửa
+                                {savingSummary ? (
+                                  <>
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                    Đang lưu...
+                                  </>
+                                ) : (
+                                  <>
+                                    <Save className="h-4 w-4" />
+                                    Lưu chỉnh sửa
+                                  </>
+                                )}
                               </Button>
                               <Button
                                 onClick={handleCancelSummaryEdit}
@@ -1319,7 +1371,31 @@ export default function MeetingDetailPage() {
                                         />
                                       </div>
                                     </div>
-                                    <div className="mt-2 flex justify-end">
+                                    <div className="mt-2 flex flex-wrap justify-between gap-2">
+                                      <div className="flex gap-2">
+                                        <Button
+                                          type="button"
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() => handleMoveTask(index, -1)}
+                                          disabled={index === 0}
+                                          className="gap-1"
+                                        >
+                                          <ArrowUp className="h-3.5 w-3.5" />
+                                          Lên
+                                        </Button>
+                                        <Button
+                                          type="button"
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() => handleMoveTask(index, 1)}
+                                          disabled={index === summaryDraft.tasks.length - 1}
+                                          className="gap-1"
+                                        >
+                                          <ArrowDown className="h-3.5 w-3.5" />
+                                          Xuống
+                                        </Button>
+                                      </div>
                                       <Button
                                         type="button"
                                         size="sm"
@@ -1339,7 +1415,7 @@ export default function MeetingDetailPage() {
                           <div className="rounded-2xl border bg-card p-4 shadow-sm">
                             <div className="mb-3 flex items-center justify-between gap-2">
                               <div className="flex items-center gap-2">
-                                <CalendarRange className="h-4 w-4 text-sky-600" />
+                                <CalendarRange className="h-4 w-4 text-green-700" />
                                 <h3 className="font-semibold">Mốc thời gian</h3>
                               </div>
                               <Button
@@ -1536,7 +1612,7 @@ export default function MeetingDetailPage() {
 
                           <div className="rounded-2xl border bg-card p-5 shadow-sm">
                             <div className="mb-4 flex items-center gap-2">
-                              <CalendarRange className="h-4 w-4 text-sky-600" />
+                              <CalendarRange className="h-4 w-4 text-green-700" />
                               <h3 className="font-semibold">
                                 Mốc thời gian quan trọng
                               </h3>
@@ -1546,9 +1622,9 @@ export default function MeetingDetailPage() {
                                 {summary.deadlines.map((deadline, index) => (
                                   <div
                                     key={`deadline-read-${index}`}
-                                    className="grid gap-3 rounded-2xl border border-sky-100 bg-sky-50/60 p-4 md:grid-cols-[220px_1fr] md:items-center"
+                                    className="grid gap-3 rounded-2xl border border-green-100 bg-green-50/70 p-4 md:grid-cols-[220px_1fr] md:items-center"
                                   >
-                                    <div className="rounded-xl bg-white/80 px-3 py-2 text-sm font-semibold text-sky-700 shadow-sm">
+                                    <div className="rounded-xl bg-white/80 px-3 py-2 text-sm font-semibold text-green-700 shadow-sm">
                                       {deadline.date || "Chưa rõ thời gian"}
                                     </div>
                                     <p className="text-sm leading-6 text-foreground/90">

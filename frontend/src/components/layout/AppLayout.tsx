@@ -39,17 +39,16 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
       <header className="sticky top-0 z-50 w-full border-b border-border/50 bg-card/80 backdrop-blur-md">
         <div className="container flex h-16 items-center justify-between">
           <Link to="/dashboard" className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl gradient-primary flex items-center justify-center shadow-soft">
-              <AudioWaveform className="w-5 h-5 text-primary-foreground" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl gradient-primary shadow-soft">
+              <AudioWaveform className="h-5 w-5 text-primary-foreground" />
             </div>
             <span className="text-xl font-bold text-foreground">Verba</span>
           </Link>
 
-          <nav className="hidden md:flex items-center gap-6">
+          <nav className="hidden items-center gap-6 md:flex">
             <Link
               to="/dashboard"
               className={`text-sm font-medium transition-colors hover:text-primary ${
@@ -64,7 +63,8 @@ export function AppLayout({ children }: AppLayoutProps) {
               </span>
             </Link>
           </nav>
-          <nav className="hidden md:flex items-center gap-6">
+
+          <nav className="hidden items-center gap-6 md:flex">
             <Link
               to="/meetings"
               className={`text-sm font-medium transition-colors hover:text-primary ${
@@ -75,10 +75,11 @@ export function AppLayout({ children }: AppLayoutProps) {
             >
               <span className="flex items-center gap-2">
                 <LayoutDashboard className="h-4 w-4" />
-                Meeting
+                Cuộc họp
               </span>
             </Link>
           </nav>
+
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
@@ -86,14 +87,14 @@ export function AppLayout({ children }: AppLayoutProps) {
                 className="relative h-10 w-10 rounded-full"
               >
                 <Avatar className="h-10 w-10 border-2 border-primary/20">
-                  <AvatarFallback className="bg-accent text-accent-foreground font-medium">
+                  <AvatarFallback className="bg-accent font-medium text-accent-foreground">
                     {user?.name ? getInitials(user.name) : "U"}
                   </AvatarFallback>
                 </Avatar>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent
-              className="w-56 bg-popover border-border"
+              className="w-56 border-border bg-popover"
               align="end"
               forceMount
             >
@@ -106,7 +107,7 @@ export function AppLayout({ children }: AppLayoutProps) {
               <DropdownMenuSeparator />
               <DropdownMenuItem className="cursor-pointer">
                 <User className="mr-2 h-4 w-4" />
-                <span>Há»“ sÆ¡</span>
+                <span>Hồ sơ</span>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
@@ -114,14 +115,13 @@ export function AppLayout({ children }: AppLayoutProps) {
                 className="cursor-pointer text-destructive focus:text-destructive"
               >
                 <LogOut className="mr-2 h-4 w-4" />
-                <span>ÄÄƒng xuáº¥t</span>
+                <span>Đăng xuất</span>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
       </header>
 
-      {/* Main Content */}
       <main className="container py-6">
         <motion.div
           initial={{ opacity: 0, y: 10 }}
@@ -134,4 +134,3 @@ export function AppLayout({ children }: AppLayoutProps) {
     </div>
   );
 }
-

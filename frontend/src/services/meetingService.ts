@@ -118,7 +118,7 @@ export async function updateTranscript(
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ segments: editedSegments }),
+      body: JSON.stringify({ edits: editedSegments }),
     }),
   );
 }
@@ -133,6 +133,25 @@ export async function getMeetingSummaryById(
     apiRequest<MeetingSummary>(buildMeetingPath(id, "/summary"), {
       method: "GET",
       requireAuth: true,
+    }),
+  );
+}
+
+/**
+ * Saves edited summary for a meeting
+ */
+export async function updateMeetingSummary(
+  id: string,
+  summary: MeetingSummary,
+): Promise<ServiceResult<MeetingSummary>> {
+  return safeRequest("updating summary", () =>
+    apiRequest<MeetingSummary>(buildMeetingPath(id, "/summary"), {
+      method: "PATCH",
+      requireAuth: true,
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(summary),
     }),
   );
 }

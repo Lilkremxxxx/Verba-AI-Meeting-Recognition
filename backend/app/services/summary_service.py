@@ -427,7 +427,7 @@ async def generate_and_store_summary(
         await db.execute(
             '''
             UPDATE meetings
-            SET summary = $1::jsonb, updated_at = NOW()
+            SET summary = $1::jsonb, status = 'DONE', updated_at = NOW()
             WHERE id = $2
             ''',
             summary_payload,
@@ -438,3 +438,4 @@ async def generate_and_store_summary(
         raise HTTPException(status_code=500, detail='Failed to save summary to database')
 
     return summary_data
+
